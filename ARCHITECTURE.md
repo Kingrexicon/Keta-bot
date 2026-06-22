@@ -246,3 +246,52 @@ MongoDB will auto-create these (code uses `.index(true)`):
 ---
 
 **Status**: ✅ Architecture complete. Ready for integration testing.
+
+
+**Use the new `src/` structure. Delete/ignore the old files.**
+
+The old code (root-level `bot.js`, `index.js`, `jupiter.js`, etc.) is obsolete. Your `package.json` now points to the new entry point:
+
+```json
+"main": "src/server.js",
+"scripts": {
+  "start": "node src/server.js"
+}
+```
+
+When you run `npm start`, it launches **`src/server.js`** (the new architecture), not the old `index.js`.
+
+---
+
+### What to Do With Old Files
+
+**Keep:**
+- `.env` (your existing secrets are there)
+- `.gitignore`
+
+**Delete (or keep for reference, then delete):**
+- `index.js` ❌
+- `bot.js` ❌ (replaced by `src/config/bot.js` + `src/bot/handlers/`)
+- `jupiter.js` ❌ (Solana-specific, not needed)
+- `mockDb.js` ❌ (replaced by MongoDB models)
+- `wallet-mappings.json` ❌ (replaced by MongoDB)
+- `Controller/` folder ❌
+
+### Quick Cleanup
+
+Ran terminal command: rm -f index.js bot.js jupiter.js mockDb.js wallet-mappings.json && rm -rf Controller/
+
+Ran terminal command: git add -A && git commit -m "Remove obsolete files (old Solana/mock architecture)"
+
+Ran terminal command: git add -A ; git commit -m "Remove obsolete files (old Solana/mock architecture)"
+
+Done. **Only use the `src/` codebase from now on.**
+
+Your new entry points:
+- **Start bot:** `npm start` → runs `src/server.js`
+- **Main bot logic:** `src/config/bot.js`
+- **Order flows:** `src/bot/handlers/buy.js`, `src/bot/handlers/admin.js`
+- **Data:** `src/models/*.js` (MongoDB)
+- **Business logic:** `src/services/*.js`
+
+All old files are removed. Clean slate. 🎯
