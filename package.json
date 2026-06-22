@@ -1,21 +1,22 @@
 {
-  "name": "ketabot",
+  "name": "ketabot-crypto-broker",
   "version": "1.0.0",
-  "description": "telegram bot",
+  "description": "Telegram Crypto Broker Bot - Buy/Sell USDT, BTC, ETH",
   "license": "ISC",
-  "author": "",
+  "author": "rex",
   "type": "commonjs",
-  "main": "index.js",
+  "main": "src/server.js",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1",
-    "start": "node index.js"
+    "start": "node src/server.js",
+    "dev": "node src/server.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
   },
   "dependencies": {
-    "@privy-io/node": "^0.21.0",
-    "@solana/web3.js": "^1.98.4",
-    "axios": "^1.18.0",
     "dotenv": "^17.4.2",
     "express": "^5.2.1",
-    "node-telegram-bot-api": "^0.64.0"
+    "mongoose": "^9.7.1",
+    "telegraf": "^4.16.3",
+    "uuid": "^9.0.1",
+    "node-cron": "^3.0.3"
   }
 }
