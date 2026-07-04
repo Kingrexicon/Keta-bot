@@ -1,5 +1,7 @@
 require('dotenv').config();
 require('dotenv').config({ path: '.env.local', override: true });
+const dns = require('dns');
+dns.setServers(['1.1.1.1', '8.8.8.8']);
 
 const express = require('express');
 const cron = require('node-cron');
@@ -21,7 +23,7 @@ async function startServer() {
     app.use(webhookRoute);
 
     app.get('/', (req, res) => {
-      res.json({ message: '✅ KetaBot API is running', status: 'active' });
+      res.json({ message: '✅ KetaBot API is running locally', status: 'active' });
     });
 
     app.get('/health', (req, res) => {
@@ -29,9 +31,10 @@ async function startServer() {
     });
 
     app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`🚀 Server running on  ${PORT}`);
     });
 
+    // Expiry sweep: runs every 5 minutes
     cron.schedule('*/5 * * * *', async () => {
       try {
         const expired = await expireOrders();

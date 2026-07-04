@@ -7,19 +7,24 @@ const mainMenu = () =>
   ]).resize();
 
 const coinMenu = () =>
-  Markup.keyboard([['USDT', 'BTC', 'ETH'], ['Cancel']])
+  Markup.keyboard([['USDT', 'BTC', 'ETH', 'USDC' ], ['Cancel']])
     .resize()
-    .oneTimeKeyboard();
+    .oneTime();
 
 const networkMenu = () =>
   Markup.keyboard([['TRC20', 'BEP20'], ['Cancel']])
     .resize()
-    .oneTimeKeyboard();
+    .oneTime();
+
+const chainMenu = () =>
+  Markup.keyboard([['BTC', 'ETH', 'USDT-TRC20'], ['USDT-BEP20', 'USDC-TRC20', 'USDC-BEP20'], ['Cancel']])
+    .resize()
+    .oneTime();
 
 const confirmMenu = () =>
   Markup.keyboard([['✅ Confirm', '❌ Cancel']])
     .resize()
-    .oneTimeKeyboard();
+    .oneTime();
 
 const adminMenu = () =>
   Markup.keyboard([
@@ -31,6 +36,7 @@ module.exports = {
   mainMenu,
   coinMenu,
   networkMenu,
+  chainMenu,
   confirmMenu,
   adminMenu
 };

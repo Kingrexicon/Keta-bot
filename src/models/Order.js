@@ -7,60 +7,95 @@ const orderSchema = new mongoose.Schema({
     unique: true,
     index: true
   },
-  userId: {
-    type: mongoose.Schema.Types.ObjectId,
-    ref: 'User',
+  clientTelegramId: {
+    type: Number,
     required: true,
     index: true
   },
-  type: {
+  clientUsername: {
     type: String,
-    enum: ['BUY', 'SELL'],
+    default: ''
+  },
+  walletAddress: {
+    type: String,
+    default: ''
+  },
+  chain: {
+    type: String,
+    enum: ['BTC', 'ETH', 'USDT-TRC20', 'USDT-BEP20', 'USDC-TRC20', 'USDC-BEP20'],
     required: true
   },
-  coin: {
-    type: String,
-    enum: ['USDT', 'BTC', 'ETH'],
+  fiatAmount: {
+    type: Number,
     required: true
   },
-  network: {
+  fiatCurrency: {
     type: String,
-    enum: ['TRC20', 'BEP20'],
+    default: 'NGN'
+  },
+  exchangeRate: {
+    type: Number,
     required: true
   },
   cryptoAmount: {
     type: Number,
     required: true
   },
-  nairaAmount: {
-    type: Number,
-    required: true
-  },
-  rate: {
-    type: Number,
-    required: true
-  },
-  fee: {
-    type: Number,
-    default: 0
-  },
   status: {
     type: String,
-    enum: ['WAITING_PAYMENT', 'PAYMENT_UPLOADED', 'PAYMENT_VERIFIED', 'CRYPTO_SENT', 'COMPLETED', 'EXPIRED', 'REJECTED'],
-    default: 'WAITING_PAYMENT',
-    index: true
-  },
-  walletAddress: String,
-  receiptFileId: String,
-  expiresAt: {
-    type: Date,
+    enum: ['pending', 'payment_claimed', 'verified', 'released', 'expired', 'cancelled', 'failed'],
+    default: 'pending',
     index: true
   },
   createdAt: {
     type: Date,
-    default: Date.now,
+    default: Date.now
+  },
+  expiresAt: {
+    type: Date,
     index: true
+  },
+  paymentClaimedAt: {
+    type: Date
+  },
+  verifiedBy: {
+    type: Number,
+    default: null
+  },
+  verifiedAt: {
+    type: Date
+  },
+  releasedBy: {
+    type: Number,
+    default: null
+  },
+  releasedAt: {
+    type: Date
+  },
+  txHash: {
+    type: String,
+    default: ''
+  },
+  payoutError: {
+    type: String,
+    default: ''
+  },
+  bankReferenceSeen: {
+    type: String,
+    default: ''
+  },
+  releaseButtonMessageId: {
+    type: Number,
+    default: null
+  },
+  releaseButtonChatId: {
+    type: Number,
+    default: null
   }
 });
+
+// Indexes for efficient queries
+orderSchema.index({ clientTelegramId: 1, status: 1 });
+orderSchema.index({ status: 1, expiresAt: 1 });
 
 module.exports = mongoose.model('Order', orderSchema);

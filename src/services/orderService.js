@@ -1,90 +1,167 @@
 const Order = require('../models/Order');
-const AuditLog = require('../models/AuditLog');
+const PayoutLog = require('../models/PayoutLog');
 const { generateOrderRef } = require('../utils/validators');
-const { ORDER_EXPIRY_MINUTES, ORDER_STATUS, FEE } = require('../utils/constants');
+const { ORDER_EXPIRY_MINUTES, ORDER_STATUS } = require('../utils/constants');
 
-async function createOrder(userId, type, coin, network, cryptoAmount, rate) {
+async function createOrder(clientTelegramId, clientUsername, chain, fiatAmount, exchangeRate) {
   const orderRef = generateOrderRef();
-  const nairaAmount = Math.floor(cryptoAmount * rate);
+  const cryptoAmount = Math.floor((fiatAmount / exchangeRate) * 10000) / 10000; // 4 decimal places
   const expiresAt = new Date(Date.now() + ORDER_EXPIRY_MINUTES * 60 * 1000);
 
   const order = new Order({
     orderRef,
-    userId,
-    type,
-    coin,
-    network,
+    clientTelegramId,
+    clientUsername,
+    chain,
+    fiatAmount,
+    fiatCurrency: 'NGN',
+    exchangeRate,
     cryptoAmount,
-    nairaAmount,
-    rate,
-    fee: FEE,
-    status: ORDER_STATUS.WAITING_PAYMENT,
+    status: ORDER_STATUS.PENDING,
     expiresAt
   });
 
   await order.save();
-
-  await AuditLog.create({
-    userId,
-    orderRef,
-    action: 'ORDER_CREATED',
-    actor: 'user',
-    details: { type, coin, network, amount: cryptoAmount }
-  });
-
   return order;
 }
 
-async function getOrderByRef(orderRef) {
-  return Order.findOne({ orderRef }).populate('userId');
+/**
+ * Atomic status-guarded update: client claims payment sent
+ */
+async function claimPayment(orderRef, clientTelegramId) {
+  const order = await Order.findOneAndUpdate(
+    { orderRef, clientTelegramId, status: ORDER_STATUS.PENDING, expiresAt: { $gt: new Date() } },
+    { $set: { status: ORDER_STATUS.PAYMENT_CLAIMED, paymentClaimedAt: new Date() } },
+    { returnDocument: 'after' }
+  );
+  return order;
 }
 
-async function updateOrderStatus(orderRef, status, details = {}) {
+/**
+ * Atomic status-guarded update: admin verifies payment
+ */
+async function verifyOrder(orderRef, adminId) {
+  const order = await Order.findOneAndUpdate(
+    { orderRef, status: ORDER_STATUS.PAYMENT_CLAIMED },
+    { $set: { status: ORDER_STATUS.VERIFIED, verifiedBy: adminId, verifiedAt: new Date() } },
+    { returnDocument: 'after' }
+  );
+  return order;
+}
+
+/**
+ * Atomic status-guarded update: admin releases crypto
+ * Returns the updated order, or null if the order was not in 'verified' state
+ */
+async function releaseOrder(orderRef, adminId) {
+  const order = await Order.findOneAndUpdate(
+    { orderRef, status: ORDER_STATUS.VERIFIED },
+    { $set: { status: ORDER_STATUS.RELEASED, releasedBy: adminId, releasedAt: new Date() } },
+    { returnDocument: 'after' }
+  );
+  return order;
+}
+
+/**
+ * Rollback release if payout fails — set status back to 'verified' so admin can retry
+ */
+async function rollbackRelease(orderRef) {
+  const order = await Order.findOneAndUpdate(
+    { orderRef, status: ORDER_STATUS.RELEASED },
+    { $set: { status: ORDER_STATUS.VERIFIED, releasedBy: null, releasedAt: null } },
+    { returnDocument: 'after' }
+  );
+  return order;
+}
+
+/**
+ * Mark order as failed (payout error, needs manual retry)
+ */
+async function failOrder(orderRef, errorMessage) {
   const order = await Order.findOneAndUpdate(
     { orderRef },
-    { status },
-    { new: true }
+    { $set: { status: ORDER_STATUS.FAILED, payoutError: errorMessage } },
+    { returnDocument: 'after' }
   );
-
-  if (order) {
-    await AuditLog.create({
-      userId: order.userId,
-      orderRef,
-      action: status === ORDER_STATUS.PAYMENT_UPLOADED ? 'PAYMENT_UPLOADED' : status,
-      actor: 'system',
-      details
-    });
-  }
-
   return order;
 }
 
+/**
+ * Update order with tx hash after successful payout
+ */
+async function setTxHash(orderRef, txHash) {
+  return Order.findOneAndUpdate(
+    { orderRef },
+    { $set: { txHash } },
+    { returnDocument: 'after' }
+  );
+}
+
+/**
+ * Store release button message info so we can edit/disable it later
+ */
+async function setReleaseButtonInfo(orderRef, messageId, chatId) {
+  return Order.findOneAndUpdate(
+    { orderRef },
+    { $set: { releaseButtonMessageId: messageId, releaseButtonChatId: chatId } },
+    { returnDocument: 'after' }
+  );
+}
+
+/**
+ * Get order by reference
+ */
+async function getOrderByRef(orderRef) {
+  return Order.findOne({ orderRef });
+}
+
+/**
+ * Get pending orders (for admin listing)
+ */
 async function getPendingOrders() {
-  return Order.find({ status: ORDER_STATUS.WAITING_PAYMENT }).populate('userId');
-}
-
-async function getExpiredOrders() {
   return Order.find({
-    status: ORDER_STATUS.WAITING_PAYMENT,
-    expiresAt: { $lt: new Date() }
-  });
+    status: { $in: [ORDER_STATUS.PENDING, ORDER_STATUS.PAYMENT_CLAIMED] }
+  }).sort({ createdAt: -1 });
 }
 
+/**
+ * Expire stale pending orders
+ */
 async function expireOrders() {
-  const expired = await getExpiredOrders();
+  const result = await Order.updateMany(
+    { status: ORDER_STATUS.PENDING, expiresAt: { $lt: new Date() } },
+    { $set: { status: ORDER_STATUS.EXPIRED } }
+  );
+  return result.modifiedCount;
+}
 
-  for (const order of expired) {
-    await updateOrderStatus(order.orderRef, ORDER_STATUS.EXPIRED, { reason: 'Payment not received within 30 minutes' });
-  }
-
-  return expired.length;
+/**
+ * Log a payout attempt (append-only audit trail)
+ */
+async function logPayoutAttempt(orderRef, cryptoAmount, chain, walletAddress, adminId, status, txHash, error) {
+  return PayoutLog.create({
+    orderRef,
+    cryptoAmount,
+    chain,
+    walletAddress,
+    adminId,
+    status,
+    txHash: txHash || '',
+    error: error || ''
+  });
 }
 
 module.exports = {
   createOrder,
+  claimPayment,
+  verifyOrder,
+  releaseOrder,
+  rollbackRelease,
+  failOrder,
+  setTxHash,
+  setReleaseButtonInfo,
   getOrderByRef,
-  updateOrderStatus,
   getPendingOrders,
-  getExpiredOrders,
-  expireOrders
+  expireOrders,
+  logPayoutAttempt
 };

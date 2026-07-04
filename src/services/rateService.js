@@ -22,7 +22,7 @@ async function setRate(coin, buyRate, sellRate) {
   return Rate.findOneAndUpdate(
     { coin },
     { buyRate, sellRate, updatedAt: new Date() },
-    { new: true, upsert: true }
+    { returnDocument: 'after', upsert: true }
   );
 }
 

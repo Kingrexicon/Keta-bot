@@ -1,22 +1,17 @@
 const Order = require('../../models/Order');
-const User = require('../../models/User');
+const Admin = require('../../models/Admin');
 const { setRate, getRate } = require('../../services/rateService');
-const { updateOrderStatus } = require('../../services/orderService');
 const { ORDER_STATUS } = require('../../utils/constants');
-
-async function isAdmin(ctx) {
-  const adminIds = (process.env.ADMIN_IDS || '').split(',').map(id => parseInt(id.trim()));
-  return adminIds.includes(ctx.from.id);
-}
+const { isAdminUser } = require('./payment');
 
 async function pendingOrdersHandler(ctx) {
-  if (!(await isAdmin(ctx))) {
+  if (!(await isAdminUser(ctx.from.id))) {
     return ctx.reply('❌ Unauthorized. Admin only.');
   }
 
   const orders = await Order.find({
-    status: { $in: [ORDER_STATUS.WAITING_PAYMENT, ORDER_STATUS.PAYMENT_UPLOADED] }
-  }).populate('userId');
+    status: { $in: [ORDER_STATUS.PENDING, ORDER_STATUS.PAYMENT_CLAIMED] }
+  }).sort({ createdAt: -1 });
 
   if (orders.length === 0) {
     return ctx.reply('✅ No pending orders.');
@@ -27,10 +22,10 @@ async function pendingOrdersHandler(ctx) {
   orders.forEach((order, idx) => {
     message += `
 ${idx + 1}. <b>${order.orderRef}</b>
-   User: @${order.userId.username || order.userId.telegramId}
-   Coin: ${order.coin} (${order.network})
-   Amount: ${order.cryptoAmount} ${order.coin}
-   Naira: ₦${order.nairaAmount.toLocaleString()}
+   User: @${order.clientUsername || order.clientTelegramId}
+   Chain: ${order.chain}
+   Amount: ₦${order.fiatAmount.toLocaleString()}
+   Crypto: ${order.cryptoAmount} ${order.chain.split('-')[0]}
    Status: ${order.status}
    `;
   });
@@ -39,7 +34,7 @@ ${idx + 1}. <b>${order.orderRef}</b>
 }
 
 async function setrateHandler(ctx) {
-  if (!(await isAdmin(ctx))) {
+  if (!(await isAdminUser(ctx.from.id))) {
     return ctx.reply('❌ Unauthorized. Admin only.');
   }
 
@@ -74,21 +69,23 @@ Sell Rate: <b>₦${sellRate.toLocaleString()}</b>
 }
 
 async function statsHandler(ctx) {
-  if (!(await isAdmin(ctx))) {
+  if (!(await isAdminUser(ctx.from.id))) {
     return ctx.reply('❌ Unauthorized. Admin only.');
   }
 
   const total = await Order.countDocuments({});
-  const completed = await Order.countDocuments({ status: ORDER_STATUS.COMPLETED });
-  const pending = await Order.countDocuments({ status: ORDER_STATUS.WAITING_PAYMENT });
-  const verified = await Order.countDocuments({ status: ORDER_STATUS.PAYMENT_VERIFIED });
+  const completed = await Order.countDocuments({ status: ORDER_STATUS.RELEASED });
+  const pending = await Order.countDocuments({ status: ORDER_STATUS.PENDING });
+  const claimed = await Order.countDocuments({ status: ORDER_STATUS.PAYMENT_CLAIMED });
+  const verified = await Order.countDocuments({ status: ORDER_STATUS.VERIFIED });
 
   const message = `
 📊 <b>Statistics</b>
 
 Total Orders: ${total}
-Completed: ${completed}
+Released: ${completed}
 Pending Payment: ${pending}
+Payment Claimed: ${claimed}
 Payment Verified: ${verified}
   `;
 
@@ -96,7 +93,6 @@ Payment Verified: ${verified}
 }
 
 module.exports = {
-  isAdmin,
   pendingOrdersHandler,
   setrateHandler,
   statsHandler
