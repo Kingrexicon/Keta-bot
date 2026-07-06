@@ -18,8 +18,44 @@ const USDT_TRC20_SHASTA = 'TXLAQ63Xg1NAzckPwKHvzw7CSEmLMEqcdj';
 // ──────────────────────────────────────────────
 // Solana helpers
 // ──────────────────────────────────────────────
+let solConnection;
+
+function getSolRpcUrl() {
+  return process.env.SOL_RPC_URL?.trim() || clusterApiUrl('devnet');
+}
+
+function isSolanaRateLimitError(err) {
+  if (!err) return false;
+  const message = String(err.message || err).toLowerCase();
+  return (
+    message.includes('429') ||
+    message.includes('too many requests') ||
+    message.includes('rate limit') ||
+    message.includes('connection rate limits exceeded')
+  );
+}
+
+async function retryRpcOperation(fn, retries = 3, baseDelayMs = 500) {
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      if (attempt === retries || !isSolanaRateLimitError(err)) {
+        throw err;
+      }
+      const delayMs = baseDelayMs * (attempt + 1);
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+    }
+  }
+}
+
 function getSolConnection() {
-  return new Connection(clusterApiUrl('devnet'), 'confirmed');
+  if (solConnection) {
+    return solConnection;
+  }
+
+  solConnection = new Connection(getSolRpcUrl(), 'confirmed');
+  return solConnection;
 }
 
 function getHotWallet() {
@@ -32,7 +68,7 @@ function getHotWallet() {
  */
 async function checkSolBalance(publicKey) {
   const connection = getSolConnection();
-  const balance = await connection.getBalance(publicKey);
+  const balance = await retryRpcOperation(() => connection.getBalance(publicKey));
   return balance / LAMPORTS_PER_SOL;
 }
 
@@ -43,7 +79,7 @@ async function checkSplTokenBalance(walletPublicKey, mintPublicKey) {
   const connection = getSolConnection();
   const ata = await getAssociatedTokenAddress(mintPublicKey, walletPublicKey);
   try {
-    const account = await getAccount(connection, ata);
+    const account = await retryRpcOperation(() => getAccount(connection, ata));
     return Number(account.amount) / 1e6; // USDC has 6 decimals
   } catch {
     return 0; // token account doesn't exist yet
@@ -65,7 +101,7 @@ async function transferSol(fromWallet, toPublicKey, amountSol) {
     })
   );
 
-  const signature = await sendAndConfirmTransaction(connection, transaction, [fromWallet]);
+  const signature = await retryRpcOperation(() => sendAndConfirmTransaction(connection, transaction, [fromWallet]));
   return signature;
 }
 
