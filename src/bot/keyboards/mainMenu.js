@@ -6,18 +6,13 @@ const mainMenu = () =>
     ['📜 My Orders', '📈 Rates']
   ]).resize();
 
-const coinMenu = () =>
-  Markup.keyboard([['USDT', 'BTC', 'ETH', 'USDC' ], ['Cancel']])
-    .resize()
-    .oneTime();
-
-const networkMenu = () =>
-  Markup.keyboard([['TRC20', 'BEP20'], ['Cancel']])
-    .resize()
-    .oneTime();
-
 const chainMenu = () =>
-  Markup.keyboard([['BTC', 'ETH', 'USDT-TRC20'], ['USDT-BEP20', 'USDC-TRC20', 'USDC-BEP20'], ['Cancel']])
+  Markup.keyboard([['SOL', 'USDT-SOL', 'USDC-SOL'], ['TRX', 'USDT-TRC20', 'USDC-TRC20'], ['Cancel']])
+    .resize()
+    .oneTime();
+
+const cancelMenu = () =>
+  Markup.keyboard([['Cancel']])
     .resize()
     .oneTime();
 
@@ -34,9 +29,8 @@ const adminMenu = () =>
 
 module.exports = {
   mainMenu,
-  coinMenu,
-  networkMenu,
   chainMenu,
+  cancelMenu,
   confirmMenu,
   adminMenu
 };

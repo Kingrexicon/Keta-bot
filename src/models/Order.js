@@ -22,7 +22,7 @@ const orderSchema = new mongoose.Schema({
   },
   chain: {
     type: String,
-    enum: ['BTC', 'ETH', 'USDT-TRC20', 'USDT-BEP20', 'USDC-TRC20', 'USDC-BEP20'],
+    enum: ['SOL', 'USDT-SOL', 'USDC-SOL', 'TRX', 'USDT-TRC20', 'USDC-TRC20'],
     required: true
   },
   fiatAmount: {

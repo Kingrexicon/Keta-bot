@@ -19,7 +19,7 @@ async function startHandler(ctx) {
 
 Your telegram ID: <code>${id}</code>
 
-I'm your crypto exchange bot. Buy and sell USDT, BTC, and ETH with ease.
+I'm your crypto exchange bot. Buy and sell USDT and USDC on Solana and Tron networks with ease.
 
 What would you like to do?
   `;

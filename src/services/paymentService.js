@@ -1,9 +1,10 @@
 /**
  * Payout function — abstracted so the button handler doesn't care which chain it is.
- * This is a placeholder integration point. Replace with actual wallet/API calls.
+ * Dispatches to the appropriate blockchain-specific payout handler.
  */
 
 const { validateWalletAddress } = require('../utils/validators');
+const { releaseSolana, releaseTron } = require('./payoutService');
 
 /**
  * Release crypto to the user's wallet.
@@ -21,33 +22,23 @@ async function releaseCrypto(order) {
     throw new Error(`Invalid wallet address for chain ${order.chain}: ${order.walletAddress}`);
   }
 
-  // --- TODO: Implement actual crypto transfer ---
-  // switch (order.chain) {
-  //   case 'BTC':
-  //     // Use bitcoinjs-lib or exchange withdrawal API
-  //     break;
-  //   case 'ETH':
-  //     // Use ethers.js
-  //     break;
-  //   case 'USDT-TRC20':
-  //   case 'USDC-TRC20':
-  //     // Use TronWeb
-  //     break;
-  //   case 'USDT-BEP20':
-  //   case 'USDC-BEP20':
-  //     // Use ethers.js with BSC RPC
-  //     break;
-  //   default:
-  //     throw new Error(`Unsupported chain: ${order.chain}`);
-  // }
+  // Dispatch to the correct payout handler based on chain
+  const solanaChains = ['SOL', 'USDT-SOL', 'USDC-SOL'];
+  const tronChains = ['TRX', 'USDT-TRC20', 'USDC-TRC20'];
 
-  // Simulate a successful payout for now — replace with real implementation
-  console.log(`[PAYOUT] Would send ${order.cryptoAmount} ${order.chain} to ${order.walletAddress}`);
+  // NOTE: order has already been set to 'released' status by releaseOrder() before this is called,
+  // so the payout handlers will set status to FAILED on error. The caller handles rollback.
 
-  // Simulated tx hash
-  const simulatedTxHash = `SIM_TX_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+  if (solanaChains.includes(order.chain)) {
+    return releaseSolana(order, order.releasedBy || 0);
+  }
 
-  return { success: true, txHash: simulatedTxHash };
+  if (tronChains.includes(order.chain)) {
+    return releaseTron(order, order.releasedBy || 0);
+  }
+
+  // Fall through to a descriptive error so it's explicit.
+  throw new Error(`Payout handler not yet implemented for chain: ${order.chain}`);
 }
 
 module.exports = {

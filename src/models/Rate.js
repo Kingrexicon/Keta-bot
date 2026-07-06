@@ -5,7 +5,7 @@ const rateSchema = new mongoose.Schema({
     type: String,
     required: true,
     unique: true,
-    enum: ['USDT', 'BTC', 'ETH', 'USDC'],
+    enum: ['SOL', 'TRX', 'USDT', 'USDC'],
     index: true
   },
   buyRate: {

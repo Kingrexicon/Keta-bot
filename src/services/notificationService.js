@@ -45,7 +45,8 @@ Check your bank app for a matching transfer, then confirm.
   `;
 
   const keyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('✅ Confirm Payment', `confirm_payment_${order.orderRef}`)]
+    [Markup.button.callback('✅ Confirm Payment', `confirm_payment_${order.orderRef}`)],
+    [Markup.button.callback('❌ Reject', `reject_payment_${order.orderRef}`)]
   ]);
 
   await ctx.telegram.sendMessage(adminGroupId, message, {
@@ -117,6 +118,50 @@ async function notifyUserOrderExpired(ctx, userId, orderRef) {
 }
 
 /**
+ * Notify user that their payment claim was rejected by admin
+ */
+async function notifyUserPaymentRejected(ctx, userId, orderRef) {
+  const message = `❌ <b>Payment Claim Rejected</b>\n\nYour claim for order <code>${orderRef}</code> was not confirmed. If you sent the payment, please contact support. You can try again with the correct reference.`;
+
+  try {
+    await ctx.telegram.sendMessage(userId, message, { parse_mode: 'HTML' });
+  } catch (error) {
+    console.error(`Failed to notify user ${userId}:`, error.message);
+  }
+}
+
+/**
+ * Notify admin group about an expired order with resurrect button
+ */
+async function notifyAdminOrderExpired(ctx, order, adminGroupId) {
+  const message = `
+⏰ <b>ORDER EXPIRED</b>
+
+<b>Order:</b> <code>${order.orderRef}</code>
+<b>User:</b> @${order.clientUsername || order.clientTelegramId}
+<b>Chain:</b> ${order.chain}
+<b>Amount:</b> ₦${order.fiatAmount.toLocaleString()}
+<b>Crypto:</b> ${order.cryptoAmount} ${order.chain.split('-')[0]}
+<b>Status:</b> Expired (no action taken)
+
+If the user actually paid, you can resurrect this order.
+  `;
+
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('🔄 Resurrect Order', `resurrect_order_${order.orderRef}`)]
+  ]);
+
+  try {
+    await ctx.telegram.sendMessage(adminGroupId, message, {
+      parse_mode: 'HTML',
+      ...keyboard
+    });
+  } catch (error) {
+    console.error(`Failed to notify admin group about expired order:`, error.message);
+  }
+}
+
+/**
  * Notify admin group about a payout failure
  */
 async function notifyAdminPayoutFailed(ctx, order, errorMessage) {
@@ -143,16 +188,14 @@ async function notifyAdminPayoutFailed(ctx, order, errorMessage) {
  */
 function getExplorerLink(txHash, chain) {
   switch (chain) {
-    case 'BTC':
-      return `https://blockstream.info/tx/${txHash}`;
-    case 'ETH':
-      return `https://etherscan.io/tx/${txHash}`;
+    case 'SOL':
+    case 'USDT-SOL':
+    case 'USDC-SOL':
+      return `https://solscan.io/tx/${txHash}?cluster=devnet`;
+    case 'TRX':
     case 'USDT-TRC20':
     case 'USDC-TRC20':
       return `https://tronscan.org/#/transaction/${txHash}`;
-    case 'USDT-BEP20':
-    case 'USDC-BEP20':
-      return `https://bscscan.com/tx/${txHash}`;
     default:
       return '';
   }
@@ -165,5 +208,7 @@ module.exports = {
   notifyUserPaymentVerified,
   notifyUserCryptoReleased,
   notifyUserOrderExpired,
+  notifyUserPaymentRejected,
+  notifyAdminOrderExpired,
   notifyAdminPayoutFailed
 };

@@ -4,29 +4,38 @@ const { createOrder } = require('../../services/orderService');
 const { notifyAdminNewOrder } = require('../../services/notificationService');
 const { CHAINS } = require('../../utils/constants');
 const { validateWalletAddress } = require('../../utils/validators');
-const { chainMenu, confirmMenu, mainMenu } = require('../keyboards/mainMenu');
+const { chainMenu, cancelMenu, confirmMenu, mainMenu } = require('../keyboards/mainMenu');
 
 async function buyHandler(ctx) {
   ctx.session.orderFlow = { type: 'BUY' };
   ctx.session.step = 'ENTER_AMOUNT';
   await ctx.reply(
     'How much Naira (NGN) do you want to spend?\n\nEnter amount as a number (e.g. 50000):',
-    { parse_mode: 'HTML' }
+    { parse_mode: 'HTML', ...cancelMenu() }
   );
 }
 
 async function handleAmountEntry(ctx) {
-  const amount = parseFloat(ctx.message.text);
+  const amount = ctx.message.text.trim();
 
-  if (isNaN(amount) || amount <= 0) {
-    return ctx.reply('Invalid amount. Please enter a valid number.');
+  // Check for cancel first
+  if (amount === 'Cancel') {
+    ctx.session.orderFlow = null;
+    ctx.session.step = null;
+    return ctx.reply('Order cancelled.', { ...mainMenu() });
   }
 
-  ctx.session.orderFlow.fiatAmount = amount;
+  const parsedAmount = parseFloat(amount);
+
+  if (isNaN(parsedAmount) || parsedAmount <= 0) {
+    return ctx.reply('Invalid amount. Please enter a valid number.', { ...cancelMenu() });
+  }
+
+  ctx.session.orderFlow.fiatAmount = parsedAmount;
   ctx.session.step = 'SELECT_CHAIN';
 
   await ctx.reply(
-    `Amount: <b>₦${amount.toLocaleString()}</b>\n\nSelect the chain for receiving crypto:`,
+    `Amount: <b>₦${parsedAmount.toLocaleString()}</b>\n\nSelect the chain for receiving crypto:`,
     { parse_mode: 'HTML', ...chainMenu() }
   );
 }
@@ -37,11 +46,11 @@ async function handleChainSelection(ctx) {
   if (chain === 'Cancel') {
     ctx.session.orderFlow = null;
     ctx.session.step = null;
-    return ctx.reply('Order cancelled.', mainMenu());
+    return ctx.reply('Order cancelled.', { ...mainMenu() });
   }
 
   if (!Object.values(CHAINS).includes(chain)) {
-    return ctx.reply('Invalid chain. Please select from the menu.', chainMenu());
+    return ctx.reply('Invalid chain. Please select from the menu.', { ...chainMenu() });
   }
 
   ctx.session.orderFlow.chain = chain;
@@ -49,7 +58,7 @@ async function handleChainSelection(ctx) {
 
   await ctx.reply(
     `Selected: <b>${chain}</b>\n\nEnter your <b>${chain}</b> wallet address where you want to receive the crypto:`,
-    { parse_mode: 'HTML' }
+    { parse_mode: 'HTML', ...cancelMenu() }
   );
 }
 
@@ -59,7 +68,7 @@ async function handleWalletEntry(ctx) {
   if (walletAddress === 'Cancel') {
     ctx.session.orderFlow = null;
     ctx.session.step = null;
-    return ctx.reply('Order cancelled.', mainMenu());
+    return ctx.reply('Order cancelled.', { ...mainMenu() });
   }
 
   const chain = ctx.session.orderFlow.chain;
@@ -67,7 +76,7 @@ async function handleWalletEntry(ctx) {
   if (!validateWalletAddress(walletAddress, chain)) {
     return ctx.reply(
       `❌ Invalid wallet address for <b>${chain}</b>.\n\nPlease check the address and try again.`,
-      { parse_mode: 'HTML' }
+      { parse_mode: 'HTML', ...cancelMenu() }
     );
   }
 
@@ -110,7 +119,11 @@ async function handleConfirm(ctx) {
   if (ctx.message.text === '❌ Cancel') {
     ctx.session.orderFlow = null;
     ctx.session.step = null;
-    return ctx.reply('Order cancelled.', mainMenu());
+    return ctx.reply('Order cancelled.', { ...mainMenu() });
+  }
+
+  if (ctx.message.text !== '✅ Confirm') {
+    return ctx.reply('Invalid action. Please select Confirm or Cancel.', { ...confirmMenu() });
   }
 
   const flow = ctx.session.orderFlow;
@@ -151,6 +164,9 @@ After sending, tap the button below to notify us.
       [Markup.button.callback('✅ I\'ve paid', `claim_payment_${order.orderRef}`)]
     ])
   });
+
+  // Send a separate message to reset the keyboard back to the main menu
+  await ctx.reply('Use the menu below to continue:', { ...mainMenu() });
 
   ctx.session.orderFlow = null;
   ctx.session.step = null;

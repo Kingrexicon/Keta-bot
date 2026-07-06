@@ -1,16 +1,22 @@
 const Order = require('../../models/Order');
 const Admin = require('../../models/Admin');
-const { claimPayment, verifyOrder, releaseOrder, rollbackRelease, failOrder, setTxHash, setReleaseButtonInfo, logPayoutAttempt } = require('../../services/orderService');
+const { claimPayment, rejectPayment, cancelClaim, verifyOrder, releaseOrder, rollbackRelease, failOrder, setTxHash, setReleaseButtonInfo, logPayoutAttempt, resurrectOrder } = require('../../services/orderService');
 const { releaseCrypto } = require('../../services/paymentService');
-const { notifyAdminPaymentClaimed, notifyUserPaymentUnderReview, notifyUserPaymentVerified, notifyUserCryptoReleased, notifyAdminPayoutFailed } = require('../../services/notificationService');
+const { notifyAdminPaymentClaimed, notifyUserPaymentUnderReview, notifyUserPaymentVerified, notifyUserCryptoReleased, notifyUserPaymentRejected, notifyAdminPayoutFailed } = require('../../services/notificationService');
 const { Markup } = require('telegraf');
 
 /**
  * Check if a Telegram user is an authorized admin (server-side DB check)
+ * Falls back to ADMIN_IDS env variable if not found in DB
  */
 async function isAdminUser(telegramId) {
+  // Check DB first
   const admin = await Admin.findOne({ telegramId, active: true });
-  return admin !== null;
+  if (admin) return true;
+
+  // Fallback: check ADMIN_IDS env variable
+  const adminIds = (process.env.ADMIN_IDS || '').split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+  return adminIds.includes(telegramId);
 }
 
 /**
@@ -30,26 +36,99 @@ async function handleClaimPayment(ctx) {
     return ctx.answerCbQuery('❌ This order does not belong to you.');
   }
 
-  // Atomic status guard: only pending orders can be claimed
-  const updated = await claimPayment(orderRef, ctx.from.id);
-
-  if (!updated) {
+  // Check if order is still pending
+  if (order.status !== 'pending') {
     return ctx.answerCbQuery('❌ Order has already been processed or has expired.');
   }
 
-  await ctx.answerCbQuery('✅ Payment claim submitted! Under review.');
+  await ctx.answerCbQuery('✅ Please send your payment receipt.');
 
-  // Edit the client's message to show it's been submitted
+  // Store the orderRef in session to track receipt submission
+  ctx.session.awaitingReceiptOrderRef = orderRef;
+
+  // Ask user to send receipt
+  await ctx.reply(
+    '📸 <b>Please send a screenshot or photo of your payment receipt/confirmation as proof of payment.</b>\n\nThis will be reviewed by an admin.',
+    { parse_mode: 'HTML' }
+  );
+}
+
+/**
+ * Handle "Reject Payment" button — admin rejects the user's payment claim
+ * Resets order back to 'pending' so user can retry
+ * Called via callback_query: reject_payment_{orderRef}
+ */
+async function handleRejectPayment(ctx) {
+  if (!(await isAdminUser(ctx.from.id))) {
+    return ctx.answerCbQuery('❌ Unauthorized. Admin only.');
+  }
+
+  const orderRef = ctx.callbackQuery.data.replace('reject_payment_', '');
+
+  const updated = await rejectPayment(orderRef, ctx.from.id);
+
+  if (!updated) {
+    return ctx.answerCbQuery('❌ Order is not in a claimable state or already processed.');
+  }
+
+  // Edit admin message to show it was rejected
   await ctx.editMessageText(
-    `${ctx.callbackQuery.message.text}\n\n⏳ <b>Your payment claim has been submitted and is under review.</b>`,
+    `❌ <b>PAYMENT REJECTED</b>\n\n<b>Order:</b> <code>${orderRef}</code>\n<b>Rejected by:</b> @${ctx.from.username || ctx.from.id}\n\nOrder has been reset to pending. The user can retry.`,
     { parse_mode: 'HTML' }
   );
 
-  // Notify admin group
-  await notifyAdminPaymentClaimed(ctx, updated, ctx.from);
+  // Notify the user
+  await notifyUserPaymentRejected(ctx, updated.clientTelegramId, orderRef);
 
-  // Notify user
-  await notifyUserPaymentUnderReview(ctx, ctx.from.id, orderRef);
+  await ctx.answerCbQuery('❌ Payment rejected. User has been notified.');
+}
+
+/**
+ * Handle "Resurrect Order" button — admin revives an expired order
+ * Called via callback_query: resurrect_order_{orderRef}
+ */
+async function handleResurrectOrder(ctx) {
+  if (!(await isAdminUser(ctx.from.id))) {
+    return ctx.answerCbQuery('❌ Unauthorized. Admin only.');
+  }
+
+  const orderRef = ctx.callbackQuery.data.replace('resurrect_order_', '');
+
+  const updated = await resurrectOrder(orderRef, ctx.from.id);
+
+  if (!updated) {
+    return ctx.answerCbQuery('❌ Cannot resurrect. Order may have already been processed.');
+  }
+
+  // Edit admin message to show it's been resurrected
+  await ctx.editMessageText(
+    `🔄 <b>ORDER RESURRECTED</b>\n\n<b>Order:</b> <code>${orderRef}</code>\n<b>Resurrected by:</b> @${ctx.from.username || ctx.from.id}\n\nOrder is now pending again. The user can make a new payment claim.`,
+    { parse_mode: 'HTML' }
+  );
+
+  await ctx.answerCbQuery('✅ Order resurrected. User can try again.');
+}
+
+/**
+ * Handle "Cancel Claim" button — user cancels their own payment claim
+ * Called via callback_query: cancel_claim_{orderRef}
+ */
+async function handleCancelClaim(ctx) {
+  const orderRef = ctx.callbackQuery.data.replace('cancel_claim_', '');
+
+  const updated = await cancelClaim(orderRef, ctx.from.id);
+
+  if (!updated) {
+    return ctx.answerCbQuery('❌ Cannot cancel. Order may have already been processed.');
+  }
+
+  // Edit the user's message to show it's been cancelled
+  await ctx.editMessageText(
+    `❌ <b>Claim Cancelled</b>\n\nYour payment claim for order <code>${orderRef}</code> has been cancelled. You can claim again after sending the payment.`,
+    { parse_mode: 'HTML' }
+  );
+
+  await ctx.answerCbQuery('✅ Claim cancelled. You can try again.');
 }
 
 /**
@@ -201,9 +280,97 @@ async function handleReleaseCrypto(ctx) {
   }
 }
 
+/**
+ * Handle receipt submission — user sends photo after claiming payment
+ */
+async function handleReceiptSubmission(ctx) {
+  const orderRef = ctx.session.awaitingReceiptOrderRef;
+
+  if (!orderRef) {
+    return ctx.reply('❌ No pending payment claim found. Please use "I\'ve paid" button on an order.');
+  }
+
+  // Get the photo file ID
+  const fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+
+  try {
+    // Update order status to payment_claimed (this marks it as claimed with proof)
+    const updated = await claimPayment(orderRef, ctx.from.id);
+
+    if (!updated) {
+      return ctx.reply('❌ Order has already been processed or has expired.');
+    }
+
+    // Store the receipt file ID in Payment model
+    const Payment = require('../../models/Payment');
+    await Payment.findOneAndUpdate(
+      { orderId: updated._id },
+      { receiptFileId: fileId },
+      { upsert: true }
+    );
+
+    // Clear the session
+    delete ctx.session.awaitingReceiptOrderRef;
+
+    // Acknowledge to user
+    await ctx.reply('✅ Receipt received! Your payment is under review by our admin team.');
+
+    // Notify admin with the receipt
+    const adminGroupId = process.env.ADMIN_GROUP_ID;
+    if (adminGroupId) {
+      const order = updated;
+      const adminMessage = `
+🔔 <b>PAYMENT CLAIMED WITH RECEIPT</b>
+
+<b>Order:</b> <code>${order.orderRef}</code>
+<b>User:</b> @${ctx.from.username || ctx.from.id}
+<b>Chain:</b> ${order.chain}
+<b>Amount:</b> ₦${order.fiatAmount.toLocaleString()}
+<b>Crypto:</b> ${order.cryptoAmount} ${order.chain.split('-')[0]}
+<b>Wallet:</b> <code>${order.walletAddress}</code>
+<b>Expected Reference:</b> <code>${order.orderRef}</code>
+
+⬇️ Receipt photo attached below:
+      `;
+
+      // Send the admin message
+      await ctx.telegram.sendMessage(adminGroupId, adminMessage, { parse_mode: 'HTML' });
+
+      // Forward the receipt photo to admin group
+      await ctx.telegram.forwardMessage(adminGroupId, ctx.from.id, ctx.message.message_id);
+
+      // Send confirmation/rejection buttons
+      const keyboard = Markup.inlineKeyboard([
+        [Markup.button.callback('✅ Confirm Payment', `confirm_payment_${order.orderRef}`)],
+        [Markup.button.callback('❌ Reject', `reject_payment_${order.orderRef}`)]
+      ]);
+
+      await ctx.telegram.sendMessage(adminGroupId, 'Check the receipt above, then confirm or reject:', {
+        parse_mode: 'HTML',
+        ...keyboard
+      });
+    }
+
+    // Notify user with a cancel claim button
+    await notifyUserPaymentUnderReview(ctx, ctx.from.id, orderRef);
+    await ctx.reply(
+      `If you made a mistake, you can cancel your claim:`,
+      Markup.inlineKeyboard([
+        [Markup.button.callback('❌ Cancel Claim', `cancel_claim_${orderRef}`)]
+      ])
+    );
+  } catch (error) {
+    console.error('Receipt submission error:', error.message);
+    ctx.reply('❌ Error processing receipt. Please try again.');
+  }
+}
+
 module.exports = {
   handleClaimPayment,
+  handleRejectPayment,
+  handleCancelClaim,
   handleConfirmPayment,
   handleReleaseCrypto,
-  isAdminUser
+  handleResurrectOrder,
+  handleReceiptSubmission
 };

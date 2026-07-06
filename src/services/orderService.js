@@ -2,9 +2,10 @@ const Order = require('../models/Order');
 const PayoutLog = require('../models/PayoutLog');
 const { generateOrderRef } = require('../utils/validators');
 const { ORDER_EXPIRY_MINUTES, ORDER_STATUS } = require('../utils/constants');
+const { releaseSolana, releaseTron } = require('./payoutService');
 
 async function createOrder(clientTelegramId, clientUsername, chain, fiatAmount, exchangeRate) {
-  const orderRef = generateOrderRef();
+  const orderRef = await generateOrderRef();
   const cryptoAmount = Math.floor((fiatAmount / exchangeRate) * 10000) / 10000; // 4 decimal places
   const expiresAt = new Date(Date.now() + ORDER_EXPIRY_MINUTES * 60 * 1000);
 
@@ -27,11 +28,37 @@ async function createOrder(clientTelegramId, clientUsername, chain, fiatAmount, 
 
 /**
  * Atomic status-guarded update: client claims payment sent
+ * Resets the expiry timer so admin gets a full window to respond
  */
 async function claimPayment(orderRef, clientTelegramId) {
+  const newExpiry = new Date(Date.now() + ORDER_EXPIRY_MINUTES * 60 * 1000);
   const order = await Order.findOneAndUpdate(
     { orderRef, clientTelegramId, status: ORDER_STATUS.PENDING, expiresAt: { $gt: new Date() } },
-    { $set: { status: ORDER_STATUS.PAYMENT_CLAIMED, paymentClaimedAt: new Date() } },
+    { $set: { status: ORDER_STATUS.PAYMENT_CLAIMED, paymentClaimedAt: new Date(), expiresAt: newExpiry } },
+    { returnDocument: 'after' }
+  );
+  return order;
+}
+
+/**
+ * Atomic status-guarded update: admin rejects payment claim (resets to pending)
+ */
+async function rejectPayment(orderRef, adminId) {
+  const order = await Order.findOneAndUpdate(
+    { orderRef, status: ORDER_STATUS.PAYMENT_CLAIMED },
+    { $set: { status: ORDER_STATUS.PENDING, verifiedBy: adminId, verifiedAt: new Date() } },
+    { returnDocument: 'after' }
+  );
+  return order;
+}
+
+/**
+ * Atomic status-guarded update: user cancels their own payment claim (resets to pending)
+ */
+async function cancelClaim(orderRef, clientTelegramId) {
+  const order = await Order.findOneAndUpdate(
+    { orderRef, clientTelegramId, status: ORDER_STATUS.PAYMENT_CLAIMED },
+    { $set: { status: ORDER_STATUS.PENDING, paymentClaimedAt: null } },
     { returnDocument: 'after' }
   );
   return order;
@@ -125,14 +152,36 @@ async function getPendingOrders() {
 }
 
 /**
- * Expire stale pending orders
+ * Expire stale pending and payment_claimed orders
+ * Returns the list of expired orders (with clientTelegramId) so notifications can be sent
  */
 async function expireOrders() {
-  const result = await Order.updateMany(
-    { status: ORDER_STATUS.PENDING, expiresAt: { $lt: new Date() } },
+  const expired = await Order.find(
+    { status: { $in: [ORDER_STATUS.PENDING, ORDER_STATUS.PAYMENT_CLAIMED] }, expiresAt: { $lt: new Date() } }
+  );
+
+  if (expired.length === 0) return [];
+
+  const ids = expired.map(o => o._id);
+
+  await Order.updateMany(
+    { _id: { $in: ids } },
     { $set: { status: ORDER_STATUS.EXPIRED } }
   );
-  return result.modifiedCount;
+
+  return expired;
+}
+
+/**
+ * Admin resurrects an expired order back to 'pending' status
+ */
+async function resurrectOrder(orderRef, adminId) {
+  const order = await Order.findOneAndUpdate(
+    { orderRef, status: ORDER_STATUS.EXPIRED },
+    { $set: { status: ORDER_STATUS.PENDING, expiresAt: new Date(Date.now() + ORDER_EXPIRY_MINUTES * 60 * 1000), verifiedBy: adminId, verifiedAt: new Date() } },
+    { returnDocument: 'after' }
+  );
+  return order;
 }
 
 /**
@@ -154,6 +203,8 @@ async function logPayoutAttempt(orderRef, cryptoAmount, chain, walletAddress, ad
 module.exports = {
   createOrder,
   claimPayment,
+  rejectPayment,
+  cancelClaim,
   verifyOrder,
   releaseOrder,
   rollbackRelease,
@@ -163,5 +214,6 @@ module.exports = {
   getOrderByRef,
   getPendingOrders,
   expireOrders,
+  resurrectOrder,
   logPayoutAttempt
 };

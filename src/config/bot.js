@@ -2,7 +2,7 @@ const { Telegraf, session } = require('telegraf');
 const sessionMiddleware = require('../bot/middleware/session');
 const startHandler = require('../bot/handlers/start');
 const { buyHandler, handleAmountEntry, handleChainSelection, handleWalletEntry, handleConfirm } = require('../bot/handlers/buy');
-const { handleClaimPayment, handleConfirmPayment, handleReleaseCrypto } = require('../bot/handlers/payment');
+const { handleClaimPayment, handleRejectPayment, handleCancelClaim, handleConfirmPayment, handleReleaseCrypto, handleResurrectOrder, handleReceiptSubmission } = require('../bot/handlers/payment');
 const { notifyAdminNewOrder } = require('../services/notificationService');
 const { pendingOrdersHandler, setrateHandler, statsHandler } = require('../bot/handlers/admin');
 const { initializeRates } = require('../services/rateService');
@@ -29,10 +29,14 @@ function createBot() {
   bot.hears('🔴 Sell Crypto', (ctx) => ctx.reply('Sell feature coming soon!'));
   bot.hears('📈 Rates', async (ctx) => {
     const { getAllRates } = require('../services/rateService');
+    const { COINS } = require('../utils/constants');
     const rates = await getAllRates();
     let message = '<b>💱 Current Rates</b>\n\n';
     rates.forEach(rate => {
-      message += `${rate.coin}:\n  Buy: ₦${rate.buyRate.toLocaleString()}\n  Sell: ₦${rate.sellRate.toLocaleString()}\n\n`;
+      // Only show supported coins
+      if (Object.values(COINS).includes(rate.coin)) {
+        message += `${rate.coin}:\n  Buy: ₦${rate.buyRate.toLocaleString()}\n  Sell: ₦${rate.sellRate.toLocaleString()}\n\n`;
+      }
     });
     await ctx.reply(message, { parse_mode: 'HTML' });
   });
@@ -56,15 +60,30 @@ function createBot() {
   // Client callback: "I've paid"
   bot.action(/claim_payment_/, handleClaimPayment);
 
+  // Admin callback: reject payment claim
+  bot.action(/reject_payment_/, handleRejectPayment);
+
+  // Client callback: cancel their own claim
+  bot.action(/cancel_claim_/, handleCancelClaim);
+
   // Admin callback: confirm payment received
   bot.action(/confirm_payment_/, handleConfirmPayment);
 
   // Admin callback: release crypto
   bot.action(/release_crypto_/, handleReleaseCrypto);
 
-  // Handle photo messages (receipt screenshots) — no longer used in new flow but keep for safety
+  // Admin callback: resurrect expired order
+  bot.action(/resurrect_order_/, handleResurrectOrder);
+
+  // Handle photo messages (receipt screenshots)
   bot.on('photo', async (ctx) => {
-    await ctx.reply('Please use the order flow to submit your payment claim instead of sending a photo.');
+    // Check if user is awaiting receipt submission for a payment claim
+    if (ctx.session?.awaitingReceiptOrderRef) {
+      return handleReceiptSubmission(ctx);
+    }
+    
+    // Otherwise, guide user to proper flow
+    await ctx.reply('📸 To submit a payment receipt, first tap "I\'ve paid" on an order, then send the receipt photo.');
   });
 
   // Handle text messages for the buy flow state machine

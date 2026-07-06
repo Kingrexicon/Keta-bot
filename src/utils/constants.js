@@ -1,23 +1,22 @@
 const COINS = {
+  SOL: 'SOL',
+  TRX: 'TRX',
   USDT: 'USDT',
-  BTC: 'BTC',
-  ETH: 'ETH',
   USDC: 'USDC'
 };
 
 const NETWORKS = {
-  TRC20: 'TRC20',
-  BEP20: 'BEP20'
+  TRC20: 'TRC20'
 };
 
 // Chain options combining coin + network
 const CHAINS = {
-  BTC: 'BTC',
-  ETH: 'ETH',
+  SOL: 'SOL',
+  'USDT-SOL': 'USDT-SOL',
+  'USDC-SOL': 'USDC-SOL',
+  TRX: 'TRX',
   'USDT-TRC20': 'USDT-TRC20',
-  'USDT-BEP20': 'USDT-BEP20',
-  'USDC-TRC20': 'USDC-TRC20',
-  'USDC-BEP20': 'USDC-BEP20'
+  'USDC-TRC20': 'USDC-TRC20'
 };
 
 const ORDER_STATUS = {
