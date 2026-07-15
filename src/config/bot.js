@@ -118,6 +118,15 @@ function createBot() {
   return bot;
 }
 
+// Helper: run an async function with a timeout
+function withTimeout(promise, ms, label) {
+  let timer;
+  const timeout = new Promise((_, reject) => {
+    timer = setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+  });
+  return Promise.race([promise.finally(() => clearTimeout(timer)), timeout]);
+}
+
 async function initializeBot() {
   try {
     const botInstance = createBot();
@@ -128,18 +137,18 @@ async function initializeBot() {
 
     if (useWebhook) {
       // Remove existing webhook first to avoid conflicts
-      await botInstance.telegram.deleteWebhook({ drop_pending_updates: true });
+      await withTimeout(botInstance.telegram.deleteWebhook({ drop_pending_updates: true }), 10000, 'deleteWebhook');
       console.log('✅ Old webhook deleted');
       
       // Set new webhook
-      await botInstance.telegram.setWebhook(process.env.WEBHOOK_URL + '/webhook');
+      await withTimeout(botInstance.telegram.setWebhook(process.env.WEBHOOK_URL + '/webhook'), 10000, 'setWebhook');
       console.log('✅ Bot webhook set to: ' + process.env.WEBHOOK_URL + '/webhook');
     } else {
       // Always delete webhook before starting polling to ensure clean state
       try {
-        await botInstance.telegram.deleteWebhook({ drop_pending_updates: true });
+        await withTimeout(botInstance.telegram.deleteWebhook({ drop_pending_updates: true }), 10000, 'deleteWebhook');
       } catch (e) {
-        // Ignore errors deleting webhook
+        console.log('⏭️ Webhook delete skipped/timed out, proceeding with polling');
       }
       
       await botInstance.launch();
