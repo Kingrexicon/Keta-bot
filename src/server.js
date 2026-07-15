@@ -6,7 +6,7 @@ dns.setServers(['1.1.1.1', '8.8.8.8']);
 const express = require('express');
 const cron = require('node-cron');
 const { connectDB, disconnectDB } = require('./config/database');
-const { initializeBot } = require('./config/bot');
+const { initializeBot, getBot } = require('./config/bot');
 const webhookRoute = require('./routes/webhook');
 const { expireOrders } = require('./services/orderService');
 const { refreshRatesFromApi } = require('./services/rateService');
@@ -15,14 +15,25 @@ const { runDailyJob } = require('./services/backupService');
 const app = express();
 const PORT = process.env.PORT || 4040;
 
-app.use(express.json());
+// Handle raw body for Telegram webhook (Express v5 body parsing fix)
+app.use(express.json({
+  verify: (req, res, buf) => {
+    req.rawBody = buf.toString();
+  }
+}));
 
 async function startServer() {
   try {
     await connectDB();
     const bot = await initializeBot();
 
-    app.use(webhookRoute);
+    // Only mount webhook route if we're using webhook mode (not polling)
+    if (process.env.NODE_ENV === 'production' && process.env.WEBHOOK_URL && process.env.USE_POLLING !== 'true') {
+      app.use(webhookRoute);
+      console.log('✅ Webhook route mounted');
+    } else {
+      console.log('⏭️ Polling mode active, webhook route not mounted');
+    }
 
     app.get('/', (req, res) => {
       res.json({ message: '✅ KetaBot API is running locally', status: 'active' });
@@ -33,20 +44,21 @@ async function startServer() {
     });
 
     app.get('/debug', (req, res) => {
-      const { getBot } = require('./config/bot');
       const bot = getBot();
       res.json({
         hasBot: !!bot,
         hasToken: !!process.env.BOT_TOKEN,
+        tokenPrefix: process.env.BOT_TOKEN ? process.env.BOT_TOKEN.substring(0, 10) + '...' : 'missing',
         webhookUrl: process.env.WEBHOOK_URL,
         nodeEnv: process.env.NODE_ENV,
         usePolling: process.env.USE_POLLING || 'not set',
-        mongoConfigured: !!process.env.MONGO_URI
+        mongoConfigured: !!process.env.MONGO_URI,
+        mongoUriPrefix: process.env.MONGO_URI ? process.env.MONGO_URI.substring(0, 30) + '...' : 'missing'
       });
     });
 
-    app.listen(PORT, () => {
-      console.log(`🚀 Server running on  ${PORT}`);
+    const server = app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
     });
 
     // Rate refresh: runs every 5 minutes

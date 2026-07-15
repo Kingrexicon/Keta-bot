@@ -124,19 +124,40 @@ async function initializeBot() {
     await initializeRates();
 
     const isProduction = process.env.NODE_ENV === 'production';
-    const usePolling = process.env.USE_POLLING === 'true' || !isProduction || !process.env.WEBHOOK_URL;
+    const useWebhook = isProduction && process.env.WEBHOOK_URL && process.env.USE_POLLING !== 'true';
 
-    if (!usePolling && process.env.WEBHOOK_URL) {
+    if (useWebhook) {
+      // Remove existing webhook first to avoid conflicts
+      await botInstance.telegram.deleteWebhook({ drop_pending_updates: true });
+      console.log('✅ Old webhook deleted');
+      
+      // Set new webhook
       await botInstance.telegram.setWebhook(process.env.WEBHOOK_URL + '/webhook');
-      console.log('✅ Bot webhook set');
+      console.log('✅ Bot webhook set to: ' + process.env.WEBHOOK_URL + '/webhook');
     } else {
+      // Always delete webhook before starting polling to ensure clean state
+      try {
+        await botInstance.telegram.deleteWebhook({ drop_pending_updates: true });
+      } catch (e) {
+        // Ignore errors deleting webhook
+      }
+      
       await botInstance.launch();
       console.log('✅ Bot polling started');
+    }
+
+    // Test the connection by getting bot info
+    try {
+      const botInfo = await botInstance.telegram.getMe();
+      console.log(`✅ Bot connected: @${botInfo.username}`);
+    } catch (error) {
+      console.error('⚠️ Bot token may be invalid - Telegram returned error:', error.message);
     }
 
     return botInstance;
   } catch (error) {
     console.error('❌ Bot initialization failed:', error.message);
+    // Don't exit process, let the server still run with debug endpoints
     throw error;
   }
 }

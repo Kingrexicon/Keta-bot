@@ -23,14 +23,29 @@ function getDriveClient() {
     throw new Error('GOOGLE_SERVICE_ACCOUNT_KEY environment variable not set');
   }
 
-  // Read service account key (supports relative path or absolute)
-  const absolutePath = path.isAbsolute(keyPath) ? keyPath : path.join(process.cwd(), keyPath);
-  
-  if (!fs.existsSync(absolutePath)) {
-    throw new Error(`Service account key file not found at: ${absolutePath}`);
-  }
+  let key;
 
-  const key = JSON.parse(fs.readFileSync(absolutePath, 'utf8'));
+  // Support two formats:
+  // 1. Path to JSON file (for local development)
+  // 2. Base64-encoded JSON string (for Render/production where file isn't committed)
+  if (keyPath.endsWith('.json') && fs.existsSync(path.isAbsolute(keyPath) ? keyPath : path.join(process.cwd(), keyPath))) {
+    // Format 1: File path
+    const absolutePath = path.isAbsolute(keyPath) ? keyPath : path.join(process.cwd(), keyPath);
+    key = JSON.parse(fs.readFileSync(absolutePath, 'utf8'));
+  } else {
+    // Format 2: Try parsing as base64-encoded JSON
+    try {
+      const decoded = Buffer.from(keyPath, 'base64').toString('utf8');
+      key = JSON.parse(decoded);
+    } catch (parseError) {
+      // Format 3: Try as raw JSON string
+      try {
+        key = JSON.parse(keyPath);
+      } catch (rawParseError) {
+        throw new Error(`Cannot parse GOOGLE_SERVICE_ACCOUNT_KEY: not a valid file path, base64, or JSON string`);
+      }
+    }
+  }
   
   const auth = new google.auth.GoogleAuth({
     credentials: key,

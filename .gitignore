@@ -7,3 +7,4 @@ keta-wallet.txt
 config/google-service-account.json
 google-service-account.json
 src/config/google-service-account.json
+render.yaml
