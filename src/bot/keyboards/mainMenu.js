@@ -7,7 +7,7 @@ const mainMenu = () =>
   ]).resize();
 
 const chainMenu = () =>
-  Markup.keyboard([['SOL', 'USDT-SOL', 'USDC-SOL'], ['TRX', 'USDT-TRC20', 'USDC-TRC20'], ['Cancel']])
+  Markup.keyboard([['USDC-BASE-SEPOLIA', 'ETH-ERC20', 'USDT-ERC20'], ['Cancel']])
     .resize()
     .oneTime();
 

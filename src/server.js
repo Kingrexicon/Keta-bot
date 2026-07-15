@@ -10,6 +10,7 @@ const { initializeBot } = require('./config/bot');
 const webhookRoute = require('./routes/webhook');
 const { expireOrders } = require('./services/orderService');
 const { refreshRatesFromApi } = require('./services/rateService');
+const { runDailyJob } = require('./services/backupService');
 
 const app = express();
 const PORT = process.env.PORT || 4040;
@@ -70,6 +71,15 @@ async function startServer() {
         }
       } catch (error) {
         console.error('Cron job error:', error.message);
+      }
+    });
+
+    // MongoDB backup + prune job: runs daily at 3 AM
+    cron.schedule('0 3 * * *', async () => {
+      try {
+        await runDailyJob();
+      } catch (error) {
+        console.error('Backup job cron error:', error.message);
       }
     });
 

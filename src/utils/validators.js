@@ -21,28 +21,24 @@ async function generateOrderRef() {
   return `KET${dateStr}${seqNum}`;
 }
 
-function validateTRC20Address(address) {
-  return /^T[a-zA-Z0-9]{33}$/.test(address);
-}
-
-function validateSOLAddress(address) {
-  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+/**
+ * Validate Ethereum-style address (0x + 40 hex chars)
+ * Works for both ERC-20 and Base Sepolia
+ */
+function validateEVMAddress(address) {
+  return /^0x[a-fA-F0-9]{40}$/.test(address);
 }
 
 /**
  * Validate wallet address for a given chain.
- * Chain values: 'SOL', 'USDT-SOL', 'USDC-SOL', 'TRX', 'USDT-TRC20', 'USDC-TRC20'
+ * Chain values: 'USDC-BASE-SEPOLIA', 'ETH-ERC20', 'USDT-ERC20'
  */
 function validateWalletAddress(address, chain) {
   switch (chain) {
-    case 'SOL':
-    case 'USDT-SOL':
-    case 'USDC-SOL':
-      return validateSOLAddress(address);
-    case 'TRX':
-    case 'USDT-TRC20':
-    case 'USDC-TRC20':
-      return validateTRC20Address(address);
+    case 'USDC-BASE-SEPOLIA':
+    case 'ETH-ERC20':
+    case 'USDT-ERC20':
+      return validateEVMAddress(address);
     default:
       return false;
   }
@@ -51,6 +47,5 @@ function validateWalletAddress(address, chain) {
 module.exports = {
   generateOrderRef,
   validateWalletAddress,
-  validateTRC20Address,
-  validateSOLAddress
+  validateEVMAddress
 };

@@ -20,9 +20,18 @@ const orderSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  exported: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  exportedAt: {
+    type: Date,
+    default: null
+  },
   chain: {
     type: String,
-    enum: ['SOL', 'USDT-SOL', 'USDC-SOL', 'TRX', 'USDT-TRC20', 'USDC-TRC20'],
+    enum: ['USDC-BASE-SEPOLIA', 'ETH-ERC20', 'USDT-ERC20'],
     required: true
   },
   fiatAmount: {

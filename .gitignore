@@ -3,3 +3,7 @@ node_modules
 package-lock.json
 .env.local
 wallet-mappings.json
+keta-wallet.txt
+config/google-service-account.json
+google-service-account.json
+src/config/google-service-account.json

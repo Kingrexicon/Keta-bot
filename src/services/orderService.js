@@ -2,7 +2,6 @@ const Order = require('../models/Order');
 const PayoutLog = require('../models/PayoutLog');
 const { generateOrderRef } = require('../utils/validators');
 const { ORDER_EXPIRY_MINUTES, ORDER_STATUS } = require('../utils/constants');
-const { releaseSolana, releaseTron } = require('./payoutService');
 
 async function createOrder(clientTelegramId, clientUsername, chain, fiatAmount, exchangeRate) {
   const orderRef = await generateOrderRef();

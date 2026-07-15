@@ -33,8 +33,7 @@ async function initializeRates() {
     const existing = await Rate.findOne({ coin });
     if (!existing) {
       const defaults = {
-        SOL: { buyRate: 250000, sellRate: 240000 },
-        TRX: { buyRate: 150, sellRate: 140 },
+        ETH: { buyRate: 2500000, sellRate: 2400000 },
         USDT: { buyRate: 1630, sellRate: 1590 },
         USDC: { buyRate: 1630, sellRate: 1590 }
       };

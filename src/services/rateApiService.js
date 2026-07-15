@@ -4,8 +4,7 @@ const https = require('https');
  * CoinGecko coin IDs mapped to our coin symbols
  */
 const COINGECKO_IDS = {
-  SOL: 'solana',
-  TRX: 'tron',
+  ETH: 'ethereum',
   USDT: 'tether',
   USDC: 'usd-coin'
 };

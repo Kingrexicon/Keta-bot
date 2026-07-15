@@ -331,3 +331,6 @@ new updated info-->
 4. **Payout failures are visible** — On failure, status rolls back to `verified`, admin message shows error with retry button, and admin group gets an explicit alert
 5. **PayoutLog audit trail** — Every payout attempt (success or failure) is logged to a separate collection
 6. **Wallet validation at both ends** — Validated when user enters it AND again right before payout
+
+ ngrok http 4040        
+  npm run start  

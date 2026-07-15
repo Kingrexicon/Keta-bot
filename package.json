@@ -1,7 +1,7 @@
 {
   "name": "ketabot-crypto-broker",
   "version": "1.0.0",
-  "description": "Telegram Crypto Broker Bot - Buy/Sell USDT, BTC, ETH",
+  "description": "Telegram Crypto Broker Bot - Buy/Sell USDT, ETH, USDC",
   "license": "ISC",
   "author": "rex",
   "type": "commonjs",
@@ -9,17 +9,18 @@
   "scripts": {
     "start": "node src/server.js",
     "dev": "node src/server.js",
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "backup": "node -e \"require('dotenv').config(); require('./src/services/backupService').runDailyJob().then(()=>process.exit(0)).catch(()=>process.exit(1))\""
   },
   "dependencies": {
-    "@solana/spl-token": "^0.4.14",
-    "@solana/web3.js": "^1.98.4",
     "dotenv": "^17.4.2",
+    "ethers": "^6.17.0",
+    "exceljs": "^4.4.0",
     "express": "^5.2.1",
+    "googleapis": "^133.0.0",
     "mongoose": "^9.7.1",
     "node-cron": "^3.0.3",
     "telegraf": "^4.16.3",
-    "tronweb": "^6.4.0",
     "uuid": "^9.0.1"
   }
 }
