@@ -14,6 +14,11 @@ const { runDailyJob } = require('./services/backupService');
 
 const app = express();
 const PORT = process.env.PORT || 4040;
+const HOST = '0.0.0.0';
+
+// Track server state
+let serverReady = false;
+let serverStartTime = null;
 
 // Handle raw body for Telegram webhook (Express v5 body parsing fix)
 app.use(express.json({
@@ -22,10 +27,62 @@ app.use(express.json({
   }
 }));
 
-async function startServer() {
+// Health check — always responds, even before DB/bot are ready
+app.get('/', (req, res) => {
+  res.json({
+    message: '✅ KetaBot API is running',
+    status: 'active',
+    serverReady,
+    uptime: serverStartTime ? Math.floor((Date.now() - serverStartTime) / 1000) + 's' : 'just started',
+    services: {
+      database: global.__dbConnected || false,
+      bot: global.__botReady || false
+    }
+  });
+});
+
+app.get('/health', (req, res) => {
+  res.json({ ok: true });
+});
+
+app.get('/debug', (req, res) => {
+  const bot = getBot();
+  res.json({
+    hasBot: !!bot,
+    hasToken: !!process.env.BOT_TOKEN,
+    tokenPrefix: process.env.BOT_TOKEN ? process.env.BOT_TOKEN.substring(0, 10) + '...' : 'missing',
+    webhookUrl: process.env.WEBHOOK_URL,
+    nodeEnv: process.env.NODE_ENV,
+    usePolling: process.env.USE_POLLING || 'not set',
+    mongoConfigured: !!process.env.MONGO_URI,
+    mongoUriPrefix: process.env.MONGO_URI ? process.env.MONGO_URI.substring(0, 30) + '...' : 'missing',
+    serverReady,
+    dbConnected: global.__dbConnected,
+    botReady: global.__botReady
+  });
+});
+
+// Start the HTTP server FIRST so Render detects the port immediately
+const server = app.listen(PORT, HOST, () => {
+  const addr = server.address();
+  const bind = typeof addr === 'string' ? `pipe ${addr}` : `${addr.address}:${addr.port}`;
+  console.log(`🚀 Server listening on ${bind}`);
+  serverReady = true;
+  serverStartTime = Date.now();
+});
+
+// Then initialize DB and bot asynchronously
+(async function initServices() {
   try {
+    console.log('⏳ Connecting to MongoDB...');
     await connectDB();
+    global.__dbConnected = true;
+    console.log('✅ MongoDB connected');
+
+    console.log('⏳ Initializing Telegram bot...');
     const bot = await initializeBot();
+    global.__botReady = true;
+    console.log('✅ Telegram bot initialized');
 
     // Only mount webhook route if we're using webhook mode (not polling)
     if (process.env.NODE_ENV === 'production' && process.env.WEBHOOK_URL && process.env.USE_POLLING !== 'true') {
@@ -34,32 +91,6 @@ async function startServer() {
     } else {
       console.log('⏭️ Polling mode active, webhook route not mounted');
     }
-
-    app.get('/', (req, res) => {
-      res.json({ message: '✅ KetaBot API is running locally', status: 'active' });
-    });
-
-    app.get('/health', (req, res) => {
-      res.json({ ok: true });
-    });
-
-    app.get('/debug', (req, res) => {
-      const bot = getBot();
-      res.json({
-        hasBot: !!bot,
-        hasToken: !!process.env.BOT_TOKEN,
-        tokenPrefix: process.env.BOT_TOKEN ? process.env.BOT_TOKEN.substring(0, 10) + '...' : 'missing',
-        webhookUrl: process.env.WEBHOOK_URL,
-        nodeEnv: process.env.NODE_ENV,
-        usePolling: process.env.USE_POLLING || 'not set',
-        mongoConfigured: !!process.env.MONGO_URI,
-        mongoUriPrefix: process.env.MONGO_URI ? process.env.MONGO_URI.substring(0, 30) + '...' : 'missing'
-      });
-    });
-
-    const server = app.listen(PORT, () => {
-      console.log(`🚀 Server running on port ${PORT}`);
-    });
 
     // Rate refresh: runs every 5 minutes
     cron.schedule('*/5 * * * *', async () => {
@@ -76,19 +107,16 @@ async function startServer() {
         const expiredOrders = await expireOrders();
         if (expiredOrders.length > 0) {
           console.log(`⏰ Expired ${expiredOrders.length} orders`);
-          
+
           // Notify users and admin about expired orders
           const { notifyUserOrderExpired, notifyAdminOrderExpired } = require('./services/notificationService');
-          const { getBot } = require('./config/bot');
           const bot = getBot();
           const adminGroupId = process.env.ADMIN_GROUP_ID;
-          
+
           for (const order of expiredOrders) {
-            // Notify user
             if (order.clientTelegramId) {
               await notifyUserOrderExpired({ telegram: bot.telegram }, order.clientTelegramId, order.orderRef);
             }
-            // Notify admin with resurrect button
             if (adminGroupId) {
               await notifyAdminOrderExpired({ telegram: bot.telegram }, order, adminGroupId);
             }
@@ -108,17 +136,29 @@ async function startServer() {
       }
     });
 
-    process.on('SIGINT', async () => {
-      console.log('\n⛔ Shutting down...');
-      await disconnectDB();
-      process.exit(0);
-    });
+    console.log('✅ All services initialized');
   } catch (error) {
-    console.error('❌ Server startup failed:', error);
-    process.exit(1);
+    console.error('❌ Service initialization failed (server will keep running):', error.message);
+    // Don't crash — server stays up for health checks
   }
-}
+})();
 
-startServer();
+process.on('SIGINT', async () => {
+  console.log('\n⛔ Shutting down...');
+  server.close(() => {
+    console.log('HTTP server closed');
+  });
+  await disconnectDB();
+  process.exit(0);
+});
+
+process.on('SIGTERM', async () => {
+  console.log('\n⛔ Shutting down (SIGTERM)...');
+  server.close(() => {
+    console.log('HTTP server closed');
+  });
+  await disconnectDB();
+  process.exit(0);
+});
 
 module.exports = app;
