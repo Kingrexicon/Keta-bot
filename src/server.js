@@ -32,6 +32,19 @@ async function startServer() {
       res.json({ ok: true });
     });
 
+    app.get('/debug', (req, res) => {
+      const { getBot } = require('./config/bot');
+      const bot = getBot();
+      res.json({
+        hasBot: !!bot,
+        hasToken: !!process.env.BOT_TOKEN,
+        webhookUrl: process.env.WEBHOOK_URL,
+        nodeEnv: process.env.NODE_ENV,
+        usePolling: process.env.USE_POLLING || 'not set',
+        mongoConfigured: !!process.env.MONGO_URI
+      });
+    });
+
     app.listen(PORT, () => {
       console.log(`🚀 Server running on  ${PORT}`);
     });
