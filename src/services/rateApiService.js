@@ -12,14 +12,15 @@ const COINGECKO_IDS = {
 /**
  * Fetch a URL via HTTPS GET
  */
-function fetchJson(url) {
+function fetchJson(url, timeoutMs = 10000) {
   return new Promise((resolve, reject) => {
     const options = {
       headers: {
         'User-Agent': 'KetaBot-Telegram/1.0'
-      }
+      },
+      timeout: timeoutMs
     };
-    https.get(url, options, (res) => {
+    const req = https.get(url, options, (res) => {
       let data = '';
       res.on('data', chunk => data += chunk);
       res.on('end', () => {
@@ -29,7 +30,12 @@ function fetchJson(url) {
           reject(new Error(`Failed to parse JSON: ${e.message}`));
         }
       });
-    }).on('error', reject);
+    });
+    req.on('error', reject);
+    req.on('timeout', () => {
+      req.destroy();
+      reject(new Error(`Request timed out after ${timeoutMs}ms`));
+    });
   });
 }
 

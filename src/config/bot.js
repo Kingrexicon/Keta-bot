@@ -130,7 +130,13 @@ function withTimeout(promise, ms, label) {
 async function initializeBot() {
   try {
     const botInstance = createBot();
-    await initializeRates();
+
+    // Initialize rates with a timeout so it doesn't block bot startup
+    try {
+      await withTimeout(initializeRates(), 15000, 'initializeRates');
+    } catch (rateError) {
+      console.warn('⚠️ Rate initialization timed out or failed, continuing with bot startup:', rateError.message);
+    }
 
     const isProduction = process.env.NODE_ENV === 'production';
     const useWebhook = isProduction && process.env.WEBHOOK_URL && process.env.USE_POLLING !== 'true';
