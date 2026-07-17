@@ -1,12 +1,12 @@
 const https = require('https');
 
 /**
- * CoinGecko coin IDs mapped to our coin symbols
+ * Binance symbol names mapped to our coin symbols
+ * Binance has NGN pairs for USDT and ETH
  */
-const COINGECKO_IDS = {
-  ETH: 'ethereum',
-  USDT: 'tether',
-  USDC: 'usd-coin'
+const BINANCE_SYMBOLS = {
+  USDT: 'USDTNGN',
+  ETH: 'ETHNGN'
 };
 
 /**
@@ -40,27 +40,40 @@ function fetchJson(url, timeoutMs = 10000) {
 }
 
 /**
- * Fetch live NGN prices for all supported coins from CoinGecko
- * @returns {Promise<Object>} e.g. { SOL: { ngn: 280000 }, TRX: { ngn: 150 }, USDT: { ngn: 1630 }, USDC: { ngn: 1630 } }
+ * Fetch live NGN + USD prices for all supported coins from Binance
+ * Binance has no rate limiting on the public ticker endpoint
+ * @returns {Promise<Object>} e.g. { ETH: { ngn: 2850000, usd: 3400 }, USDT: { ngn: 1630, usd: 1 }, USDC: { ngn: 1630, usd: 1 } }
  */
 async function fetchLivePrices() {
-  const ids = Object.values(COINGECKO_IDS).join(',');
-  const url = `https://api.coingecko.com/api/v3/simple/price?ids=${ids}&vs_currencies=ngn`;
+  // Fetch all Binance tickers in one call
+  const url = 'https://api.binance.com/api/v3/ticker/price';
+  const allTickers = await fetchJson(url);
 
-  const data = await fetchJson(url);
-
-  // Map CoinGecko response back to our coin symbols
-  const reverseMap = {};
-  for (const [ourCoin, geckoId] of Object.entries(COINGECKO_IDS)) {
-    reverseMap[geckoId] = ourCoin;
+  // Build a lookup map from the response array
+  const priceMap = {};
+  for (const ticker of allTickers) {
+    priceMap[ticker.symbol] = parseFloat(ticker.price);
   }
 
   const prices = {};
-  for (const [geckoId, priceData] of Object.entries(data)) {
-    const ourCoin = reverseMap[geckoId];
-    if (ourCoin && priceData && priceData.ngn) {
-      prices[ourCoin] = priceData.ngn;
-    }
+
+  // Get USDT/NGN directly from Binance
+  if (priceMap['USDTNGN']) {
+    prices.USDT = { ngn: priceMap['USDTNGN'], usd: 1 };
+  }
+
+  // Get ETH/NGN and ETH/USDT from Binance
+  if (priceMap['ETHNGN'] && priceMap['ETHUSDT']) {
+    prices.ETH = { ngn: priceMap['ETHNGN'], usd: priceMap['ETHUSDT'] };
+  }
+
+  // Get USDC via USDC/USDT pair (should be ~1.0)
+  if (priceMap['USDCUSDT'] && prices.USDT) {
+    const usdcUsd = priceMap['USDCUSDT'];
+    prices.USDC = { ngn: usdcUsd * prices.USDT.ngn, usd: usdcUsd };
+  } else if (prices.USDT) {
+    // Fallback: USDC = USDT (both $1 stablecoins)
+    prices.USDC = { ngn: prices.USDT.ngn, usd: 1 };
   }
 
   return prices;
@@ -77,10 +90,11 @@ async function getAllLiveRates() {
   const spread = 0.02; // 2% spread
 
   const rates = {};
-  for (const [coin, price] of Object.entries(prices)) {
+  for (const [coin, data] of Object.entries(prices)) {
     rates[coin] = {
-      buyRate: Math.floor(price * (1 + spread)),
-      sellRate: Math.floor(price * (1 - spread))
+      buyRate: Math.floor(data.ngn * (1 + spread)),
+      sellRate: Math.floor(data.ngn * (1 - spread)),
+      usdPrice: data.usd
     };
   }
 

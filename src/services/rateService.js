@@ -11,7 +11,7 @@ async function refreshRatesFromApi() {
     for (const [coin, rates] of Object.entries(liveRates)) {
       await Rate.findOneAndUpdate(
         { coin },
-        { buyRate: rates.buyRate, sellRate: rates.sellRate, updatedAt: new Date() },
+        { buyRate: rates.buyRate, sellRate: rates.sellRate, usdPrice: rates.usdPrice, updatedAt: new Date() },
         { upsert: true }
       );
     }
@@ -33,15 +33,16 @@ async function initializeRates() {
     const existing = await Rate.findOne({ coin });
     if (!existing) {
       const defaults = {
-        ETH: { buyRate: 2500000, sellRate: 2400000 },
-        USDT: { buyRate: 1630, sellRate: 1590 },
-        USDC: { buyRate: 1630, sellRate: 1590 }
+        ETH: { buyRate: 2500000, sellRate: 2400000, usdPrice: 3400 },
+        USDT: { buyRate: 1630, sellRate: 1590, usdPrice: 1 },
+        USDC: { buyRate: 1630, sellRate: 1590, usdPrice: 1 }
       };
-      const d = defaults[coin] || { buyRate: 1630, sellRate: 1590 };
+      const d = defaults[coin] || { buyRate: 1630, sellRate: 1590, usdPrice: 1 };
       await Rate.create({
         coin,
         buyRate: d.buyRate,
-        sellRate: d.sellRate
+        sellRate: d.sellRate,
+        usdPrice: d.usdPrice
       });
     }
   }

@@ -16,6 +16,10 @@ const rateSchema = new mongoose.Schema({
     type: Number,
     required: true
   },
+  usdPrice: {
+    type: Number,
+    default: null
+  },
   updatedAt: {
     type: Date,
     default: Date.now

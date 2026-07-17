@@ -35,7 +35,13 @@ function createBot() {
     rates.forEach(rate => {
       // Only show supported coins
       if (Object.values(COINS).includes(rate.coin)) {
-        message += `${rate.coin}:\n  Buy: ₦${rate.buyRate.toLocaleString()}\n  Sell: ₦${rate.sellRate.toLocaleString()}\n\n`;
+        message += `${rate.coin}:\n`;
+        message += `  Buy:  ₦${rate.buyRate.toLocaleString()}\n`;
+        message += `  Sell: ₦${rate.sellRate.toLocaleString()}\n`;
+        if (rate.usdPrice) {
+          message += `  USD:  $${rate.usdPrice.toFixed(2)}\n`;
+        }
+        message += '\n';
       }
     });
     await ctx.reply(message, { parse_mode: 'HTML' });
