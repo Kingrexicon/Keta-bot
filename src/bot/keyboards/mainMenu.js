@@ -23,7 +23,7 @@ const confirmMenu = () =>
 
 const adminMenu = () =>
   Markup.keyboard([
-    ['/pending', '/stats', '/balances'],
+    ['/pending', '/stats'],
     ['/setrate USDT 1630', '/help']
   ]).resize();
 
