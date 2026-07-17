@@ -188,11 +188,11 @@ async function notifyAdminPayoutFailed(ctx, order, errorMessage) {
  */
 function getExplorerLink(txHash, chain) {
   switch (chain) {
-    case 'USDC-BASE-SEPOLIA':
-      return `https://sepolia.basescan.org/tx/${txHash}`;
+    case 'USDC-BASE':
+      return `https://basescan.org/tx/${txHash}`;
     case 'ETH-ERC20':
     case 'USDT-ERC20':
-      return `https://sepolia.etherscan.io/tx/${txHash}`;
+      return `https://etherscan.io/tx/${txHash}`;
     default:
       return '';
   }

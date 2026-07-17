@@ -4,7 +4,7 @@ const startHandler = require('../bot/handlers/start');
 const { buyHandler, handleAmountEntry, handleChainSelection, handleWalletEntry, handleConfirm } = require('../bot/handlers/buy');
 const { handleClaimPayment, handleRejectPayment, handleCancelClaim, handleConfirmPayment, handleReleaseCrypto, handleResurrectOrder, handleReceiptSubmission } = require('../bot/handlers/payment');
 const { notifyAdminNewOrder } = require('../services/notificationService');
-const { pendingOrdersHandler, setrateHandler, statsHandler } = require('../bot/handlers/admin');
+const { pendingOrdersHandler, setrateHandler, statsHandler, balanceHandler } = require('../bot/handlers/admin');
 const { initializeRates } = require('../services/rateService');
 const Order = require('../models/Order');
 
@@ -56,6 +56,7 @@ function createBot() {
   bot.command('pending', pendingOrdersHandler);
   bot.command('stats', statsHandler);
   bot.command('setrate', setrateHandler);
+  bot.command('balances', balanceHandler);
 
   // Client callback: "I've paid"
   bot.action(/claim_payment_/, handleClaimPayment);

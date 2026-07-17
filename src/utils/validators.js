@@ -31,11 +31,11 @@ function validateEVMAddress(address) {
 
 /**
  * Validate wallet address for a given chain.
- * Chain values: 'USDC-BASE-SEPOLIA', 'ETH-ERC20', 'USDT-ERC20'
+ * Chain values: 'USDC-BASE', 'ETH-ERC20', 'USDT-ERC20'
  */
 function validateWalletAddress(address, chain) {
   switch (chain) {
-    case 'USDC-BASE-SEPOLIA':
+    case 'USDC-BASE':
     case 'ETH-ERC20':
     case 'USDT-ERC20':
       return validateEVMAddress(address);

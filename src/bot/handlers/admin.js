@@ -3,6 +3,8 @@ const Admin = require('../../models/Admin');
 const { setRate, getRate } = require('../../services/rateService');
 const { ORDER_STATUS } = require('../../utils/constants');
 const { isAdminUser } = require('./payment');
+const { checkNativeBalance, checkTokenBalance } = require('../../services/payoutService');
+const { ethers } = require('ethers');
 
 async function pendingOrdersHandler(ctx) {
   if (!(await isAdminUser(ctx.from.id))) {
@@ -92,8 +94,66 @@ Payment Verified: ${verified}
   await ctx.reply(message, { parse_mode: 'HTML' });
 }
 
+/**
+ * Check hot wallet balances across all supported chains
+ * Command: /balances
+ */
+async function balanceHandler(ctx) {
+  if (!(await isAdminUser(ctx.from.id))) {
+    return ctx.reply('❌ Unauthorized. Admin only.');
+  }
+
+  await ctx.reply('🔍 Checking wallet balances across all chains...');
+
+  try {
+    const privateKey = process.env.EVM_WALLET_PRIVATE_KEY;
+    if (!privateKey) {
+      return ctx.reply('❌ EVM_WALLET_PRIVATE_KEY not configured.');
+    }
+
+    // Derive wallet address from private key (same address on all EVM chains)
+    const wallet = new ethers.Wallet(privateKey);
+    const walletAddress = wallet.address;
+
+    const baseRpc = process.env.BASE_MAINNET_RPC_URL;
+    const ethRpc = process.env.ETH_MAINNET_RPC_URL;
+
+    // USDC contract on Base Mainnet
+    const USDC_BASE_CONTRACT = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
+    // USDT contract on Ethereum Mainnet
+    const USDT_ERC20_CONTRACT = '0xdAC17F958D2ee523a2206206994597C13D831ec7';
+
+    // Query all balances in parallel
+    const [baseEth, baseUsdc, ethEth, ethUsdt] = await Promise.all([
+      baseRpc ? checkNativeBalance(walletAddress, baseRpc) : Promise.resolve('N/A'),
+      baseRpc ? checkTokenBalance(walletAddress, USDC_BASE_CONTRACT, baseRpc) : Promise.resolve('N/A'),
+      ethRpc ? checkNativeBalance(walletAddress, ethRpc) : Promise.resolve('N/A'),
+      ethRpc ? checkTokenBalance(walletAddress, USDT_ERC20_CONTRACT, ethRpc) : Promise.resolve('N/A')
+    ]);
+
+    const message = `
+💰 <b>Hot Wallet Balances</b>
+
+<code>${walletAddress}</code>
+
+<b>Base Mainnet:</b>
+  ETH (gas): ${parseFloat(baseEth).toFixed(6)}
+  USDC: ${parseFloat(baseUsdc).toFixed(2)}
+
+<b>Ethereum Mainnet:</b>
+  ETH (gas): ${parseFloat(ethEth).toFixed(6)}
+  USDT: ${parseFloat(ethUsdt).toFixed(2)}
+    `;
+
+    await ctx.reply(message, { parse_mode: 'HTML' });
+  } catch (error) {
+    await ctx.reply(`❌ Error checking balances: ${error.message}`);
+  }
+}
+
 module.exports = {
   pendingOrdersHandler,
   setrateHandler,
-  statsHandler
+  statsHandler,
+  balanceHandler
 };

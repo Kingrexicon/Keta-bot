@@ -4,14 +4,14 @@ const { validateEVMAddress } = require('../utils/validators');
 const { ORDER_STATUS } = require('../utils/constants');
 
 // ──────────────────────────────────────────────
-// Token contract addresses
+// Token contract addresses (Mainnet)
 // ──────────────────────────────────────────────
 
-// Base Sepolia USDC contract address
-const USDC_BASE_SEPOLIA_CONTRACT = '0x036CbD53842c5426634e7929541eC2318f3dCF7e';
+// Base Mainnet USDC contract address
+const USDC_BASE_CONTRACT = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
 
-// Ethereum Sepolia USDT contract address
-const USDT_ERC20_SEPOLIA_CONTRACT = '0xaa8E23Fb1079EA71e0a56F48a2aA51851D8433D0';
+// Ethereum Mainnet USDT contract address
+const USDT_ERC20_CONTRACT = '0xdAC17F958D2ee523a2206206994597C13D831ec7';
 
 // ──────────────────────────────────────────────
 // Provider & Wallet helpers
@@ -35,24 +35,24 @@ function getHotWallet(rpcUrl) {
 // ──────────────────────────────────────────────
 
 const CHAIN_CONFIG = {
-  'USDC-BASE-SEPOLIA': {
-    rpcUrl: () => process.env.BASE_SEPOLIA_RPC_URL,
+  'USDC-BASE': {
+    rpcUrl: () => process.env.BASE_MAINNET_RPC_URL,
     isNative: false,
-    contractAddress: USDC_BASE_SEPOLIA_CONTRACT,
+    contractAddress: USDC_BASE_CONTRACT,
     decimals: 6,
     symbol: 'USDC'
   },
   'ETH-ERC20': {
-    rpcUrl: () => process.env.ETH_SEPOLIA_RPC_URL,
+    rpcUrl: () => process.env.ETH_MAINNET_RPC_URL,
     isNative: true,
     contractAddress: null,
     decimals: 18,
     symbol: 'ETH'
   },
   'USDT-ERC20': {
-    rpcUrl: () => process.env.ETH_SEPOLIA_RPC_URL,
+    rpcUrl: () => process.env.ETH_MAINNET_RPC_URL,
     isNative: false,
-    contractAddress: USDT_ERC20_SEPOLIA_CONTRACT,
+    contractAddress: USDT_ERC20_CONTRACT,
     decimals: 6,
     symbol: 'USDT'
   }

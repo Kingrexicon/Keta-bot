@@ -7,7 +7,7 @@ const mainMenu = () =>
   ]).resize();
 
 const chainMenu = () =>
-  Markup.keyboard([['USDC-BASE-SEPOLIA', 'ETH-ERC20', 'USDT-ERC20'], ['Cancel']])
+  Markup.keyboard([['USDC-BASE', 'ETH-ERC20', 'USDT-ERC20'], ['Cancel']])
     .resize()
     .oneTime();
 
@@ -23,7 +23,7 @@ const confirmMenu = () =>
 
 const adminMenu = () =>
   Markup.keyboard([
-    ['/pending', '/stats'],
+    ['/pending', '/stats', '/balances'],
     ['/setrate USDT 1630', '/help']
   ]).resize();
 

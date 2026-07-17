@@ -6,12 +6,12 @@ const COINS = {
 
 const NETWORKS = {
   ERC20: 'ERC20',
-  BASE_SEPOLIA: 'BASE_SEPOLIA'
+  BASE: 'BASE'
 };
 
 // Chain options combining coin + network
 const CHAINS = {
-  'USDC-BASE-SEPOLIA': 'USDC-BASE-SEPOLIA',
+  'USDC-BASE': 'USDC-BASE',
   'ETH-ERC20': 'ETH-ERC20',
   'USDT-ERC20': 'USDT-ERC20'
 };
