@@ -23,8 +23,16 @@ const confirmMenu = () =>
 
 const adminMenu = () =>
   Markup.keyboard([
-    ['/pending', '/stats'],
-    ['/setrate USDT 1630', '/help']
+    ['pending', 'stats', 'balances'],
+    ['setrate USDT 1630', 'help']
+  ]).resize();
+
+const combinedAdminMenu = () =>
+  Markup.keyboard([
+    ['🟢 Buy Crypto', '🔴 Sell Crypto'],
+    ['📜 My Orders', '📈 Rates'],
+    ['pending', 'stats', 'balances'],
+    ['setrate USDT 1630', 'help']
   ]).resize();
 
 module.exports = {
@@ -32,5 +40,6 @@ module.exports = {
   chainMenu,
   cancelMenu,
   confirmMenu,
-  adminMenu
+  adminMenu,
+  combinedAdminMenu
 };

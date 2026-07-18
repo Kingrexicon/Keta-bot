@@ -1,5 +1,13 @@
 const User = require('../../models/User');
-const { mainMenu } = require('../keyboards/mainMenu');
+const Admin = require('../../models/Admin');
+const { mainMenu, combinedAdminMenu } = require('../keyboards/mainMenu');
+
+async function isAdminUser(telegramId) {
+  const admin = await Admin.findOne({ telegramId, active: true });
+  if (admin) return true;
+  const adminIds = (process.env.ADMIN_IDS || '').split(',').map(id => parseInt(id.trim())).filter(id => !isNaN(id));
+  return adminIds.includes(telegramId);
+}
 
 async function startHandler(ctx) {
   const { id, username, first_name } = ctx.from;
@@ -14,20 +22,43 @@ async function startHandler(ctx) {
     });
   }
 
-  const welcomeMessage = `
+  // Check if user is in the admin group
+  const adminGroupId = process.env.ADMIN_GROUP_ID;
+  const isInAdminGroup = ctx.chat && ctx.chat.id.toString() === adminGroupId;
+  const isAdmin = await isAdminUser(id);
+
+  if (isInAdminGroup && isAdmin) {
+    const message = `
+🎉 <b>KetaBot Admin Panel</b>
+
+<b>Admin Commands:</b>
+/pending - View pending orders
+/stats - Order statistics
+/setrate - Update exchange rates
+/balances - Check wallet balances
+
+Use the buttons below to manage the bot.
+    `;
+    await ctx.reply(message, {
+      parse_mode: 'HTML',
+      ...combinedAdminMenu()
+    });
+  } else {
+    const welcomeMessage = `
 🎉 <b>Welcome to KetaBot</b>
 
 Your telegram ID: <code>${id}</code>
 
-    I'm your crypto exchange bot. Buy and sell USDT, USDC, and ETH on EVM networks with ease.
+I'm your crypto exchange bot. Buy and sell USDT, USDC, and ETH on EVM networks with ease.
 
 What would you like to do?
-  `;
+    `;
 
-  await ctx.reply(welcomeMessage, {
-    parse_mode: 'HTML',
-    ...mainMenu()
-  });
+    await ctx.reply(welcomeMessage, {
+      parse_mode: 'HTML',
+      ...mainMenu()
+    });
+  }
 }
 
 module.exports = startHandler;

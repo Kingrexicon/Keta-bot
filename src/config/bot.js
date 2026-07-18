@@ -58,11 +58,16 @@ function createBot() {
     await ctx.reply(message, { parse_mode: 'HTML' });
   });
 
-  // Admin commands
+  // Admin commands (both /command and text button work)
   bot.command('pending', pendingOrdersHandler);
+  bot.hears('pending', pendingOrdersHandler);
   bot.command('stats', statsHandler);
+  bot.hears('stats', statsHandler);
   bot.command('setrate', setrateHandler);
+  bot.hears('setrate USDT 1630', setrateHandler);
   bot.command('balances', balanceHandler);
+  bot.hears('balances', balanceHandler);
+  bot.hears('help', (ctx) => ctx.reply('Admin commands:\n/pending - View pending orders\n/stats - Order statistics\n/setrate - Update rates\n/balances - Check wallet balances'));
 
   // Client callback: "I've paid"
   bot.action(/claim_payment_/, handleClaimPayment);
@@ -102,7 +107,7 @@ function createBot() {
     if (!s.step) return;
 
     // Don't re-process messages already handled by bot.hears() menu handlers
-    const menuButtons = ['🟢 Buy Crypto', '🔴 Sell Crypto', '📈 Rates', '📜 My Orders'];
+    const menuButtons = ['🟢 Buy Crypto', '🔴 Sell Crypto', '📈 Rates', '📜 My Orders', 'pending', 'stats', 'balances', 'setrate USDT 1630', 'help'];
     if (menuButtons.includes(ctx.message.text)) return;
 
     switch (s.step) {
