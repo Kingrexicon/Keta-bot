@@ -372,5 +372,6 @@ module.exports = {
   handleConfirmPayment,
   handleReleaseCrypto,
   handleResurrectOrder,
-  handleReceiptSubmission
+  handleReceiptSubmission,
+  isAdminUser
 };

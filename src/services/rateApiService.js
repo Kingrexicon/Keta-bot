@@ -49,6 +49,11 @@ async function fetchLivePrices() {
   const url = 'https://api.binance.com/api/v3/ticker/price';
   const allTickers = await fetchJson(url);
 
+  // Safety check: Binance should return an array, but handle non-array responses
+  if (!Array.isArray(allTickers)) {
+    throw new Error('Binance API returned unexpected response format');
+  }
+
   // Build a lookup map from the response array
   const priceMap = {};
   for (const ticker of allTickers) {
