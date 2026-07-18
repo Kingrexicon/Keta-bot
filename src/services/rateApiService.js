@@ -44,41 +44,45 @@ function fetchJson(url, timeoutMs = 10000) {
  * Binance has no rate limiting on the public ticker endpoint
  * @returns {Promise<Object>} e.g. { ETH: { ngn: 2850000, usd: 3400 }, USDT: { ngn: 1630, usd: 1 }, USDC: { ngn: 1630, usd: 1 } }
  */
+/**
+ * Fetch a single Binance ticker price
+ */
+async function fetchTicker(symbol, timeoutMs = 5000) {
+  const url = `https://api.binance.com/api/v3/ticker/price?symbol=${symbol}`;
+  const data = await fetchJson(url, timeoutMs);
+  if (data && data.price) {
+    return parseFloat(data.price);
+  }
+  return null;
+}
+
 async function fetchLivePrices() {
-  // Fetch all Binance tickers in one call
-  const url = 'https://api.binance.com/api/v3/ticker/price';
-  const allTickers = await fetchJson(url);
+  // Fetch each needed price individually (most reliable approach)
+  let usdtngn = null, ethusdt = null, ethngn = null, usdcusdt = null;
 
-  // Safety check: Binance should return an array, but handle non-array responses
-  if (!Array.isArray(allTickers)) {
-    throw new Error('Binance API returned unexpected response format');
-  }
-
-  // Build a lookup map from the response array
-  const priceMap = {};
-  for (const ticker of allTickers) {
-    priceMap[ticker.symbol] = parseFloat(ticker.price);
-  }
+  try { usdtngn = await fetchTicker('USDTNGN'); } catch (e) {}
+  try { ethusdt = await fetchTicker('ETHUSDT'); } catch (e) {}
+  try { ethngn = await fetchTicker('ETHNGN'); } catch (e) {}
+  try { usdcusdt = await fetchTicker('USDCUSDT'); } catch (e) {}
 
   const prices = {};
 
-  // Get USDT/NGN directly from Binance
-  if (priceMap['USDTNGN']) {
-    prices.USDT = { ngn: priceMap['USDTNGN'], usd: 1 };
+  if (usdtngn) {
+    prices.USDT = { ngn: usdtngn, usd: 1 };
   }
 
-  // Get ETH/NGN and ETH/USDT from Binance
-  if (priceMap['ETHNGN'] && priceMap['ETHUSDT']) {
-    prices.ETH = { ngn: priceMap['ETHNGN'], usd: priceMap['ETHUSDT'] };
+  if (ethngn && ethusdt) {
+    prices.ETH = { ngn: ethngn, usd: ethusdt };
   }
 
-  // Get USDC via USDC/USDT pair (should be ~1.0)
-  if (priceMap['USDCUSDT'] && prices.USDT) {
-    const usdcUsd = priceMap['USDCUSDT'];
-    prices.USDC = { ngn: usdcUsd * prices.USDT.ngn, usd: usdcUsd };
-  } else if (prices.USDT) {
-    // Fallback: USDC = USDT (both $1 stablecoins)
-    prices.USDC = { ngn: prices.USDT.ngn, usd: 1 };
+  if (usdcusdt && usdtngn) {
+    prices.USDC = { ngn: usdcusdt * usdtngn, usd: usdcusdt };
+  } else if (usdtngn) {
+    prices.USDC = { ngn: usdtngn, usd: 1 };
+  }
+
+  if (Object.keys(prices).length === 0) {
+    throw new Error('Could not fetch any prices from Binance');
   }
 
   return prices;
