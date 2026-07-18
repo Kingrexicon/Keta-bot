@@ -67,7 +67,59 @@ function createBot() {
   bot.hears('setrate USDT 1630', setrateHandler);
   bot.command('balances', balanceHandler);
   bot.hears('balances', balanceHandler);
-  bot.hears('help', (ctx) => ctx.reply('Admin commands:\n/pending - View pending orders\n/stats - Order statistics\n/setrate - Update rates\n/balances - Check wallet balances'));
+  bot.hears('help', async (ctx) => {
+    // Quick admin check for sensitive info
+    const { isAdminUser } = require('../bot/handlers/payment');
+    const isAdmin = await isAdminUser(ctx.from.id);
+    const Order = require('../models/Order');
+    const { ethers } = require('ethers');
+
+    // Count active orders
+    const pendingCount = await Order.countDocuments({ status: 'pending' });
+    const claimedCount = await Order.countDocuments({ status: 'payment_claimed' });
+    const totalOrders = await Order.countDocuments({});
+
+    // Get wallet address
+    let walletAddress = 'N/A';
+    try {
+      const pk = process.env.EVM_WALLET_PRIVATE_KEY;
+      if (pk) {
+        const wallet = new ethers.Wallet(pk);
+        walletAddress = wallet.address;
+      }
+    } catch (e) {}
+
+    let message = `📋 <b>KetaBot Help</b>\n\n`;
+
+    message += `<b>Your Info</b>\n`;
+    message += `Telegram ID: <code>${ctx.from.id}</code>\n`;
+    if (isAdmin) {
+      message += `Role: 👑 Admin\n`;
+    }
+    message += `\n`;
+
+    message += `<b>Hot Wallet</b>\n`;
+    message += `<code>${walletAddress}</code>\n\n`;
+
+    message += `<b>Bank Details</b>\n`;
+    message += `Bank: ${process.env.BANK_NAME || 'N/A'}\n`;
+    message += `Name: ${process.env.ACCOUNT_NAME || 'N/A'}\n`;
+    message += `Number: <code>${process.env.ACCOUNT_NUMBER || 'N/A'}</code>\n\n`;
+
+    message += `<b>Active Orders</b>\n`;
+    message += `Pending: ${pendingCount}\n`;
+    message += `Claimed: ${claimedCount}\n`;
+    message += `Total: ${totalOrders}\n\n`;
+
+    message += `<b>Admin Commands</b>\n`;
+    message += `pending - View pending orders\n`;
+    message += `stats - Order statistics\n`;
+    message += `setrate COIN RATE - Update rates\n`;
+    message += `balances - Check wallet balances\n`;
+    message += `help - Show this message\n`;
+
+    await ctx.reply(message, { parse_mode: 'HTML' });
+  });
 
   // Client callback: "I've paid"
   bot.action(/claim_payment_/, handleClaimPayment);
