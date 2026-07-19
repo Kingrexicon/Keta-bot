@@ -64,12 +64,17 @@ async function handleChainSelection(ctx) {
   const coin = chain.split('-')[0];
   const rate = await getRate(coin);
 
-  if (!rate) {
+  if (!rate || !rate.usdPrice || rate.usdPrice <= 0) {
     return ctx.reply('Rate not available. Try again later.');
   }
 
   const usdAmount = ctx.session.orderFlow.usdAmount;
   const fiatAmount = Math.floor(usdAmount * rate.buyRate / rate.usdPrice);
+
+  if (!isFinite(fiatAmount) || fiatAmount <= 0) {
+    return ctx.reply('Unable to calculate amount. Please try again or contact support.');
+  }
+
   const cryptoAmount = Math.floor((fiatAmount / rate.buyRate) * 10000) / 10000;
 
   // Verification check: only relevant if order is > $100
