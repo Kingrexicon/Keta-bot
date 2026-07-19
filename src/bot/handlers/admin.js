@@ -1,5 +1,6 @@
 const Order = require('../../models/Order');
 const Admin = require('../../models/Admin');
+const User = require('../../models/User');
 const { setRate, getRate } = require('../../services/rateService');
 const { ORDER_STATUS } = require('../../utils/constants');
 const { isAdminUser } = require('./payment');
@@ -151,9 +152,41 @@ async function balanceHandler(ctx) {
   }
 }
 
+async function verifyUserHandler(ctx) {
+  if (!(await isAdminUser(ctx.from.id))) {
+    return ctx.reply('❌ Unauthorized. Admin only.');
+  }
+
+  const args = ctx.message.text.split(' ');
+  if (args.length < 2) {
+    return ctx.reply('Usage: /verifyuser <telegramId>');
+  }
+
+  const telegramId = parseInt(args[1]);
+  if (isNaN(telegramId)) {
+    return ctx.reply('Invalid Telegram ID. Please enter a numeric ID.');
+  }
+
+  const user = await User.findOne({ telegramId });
+  if (!user) {
+    return ctx.reply(`User not found for Telegram ID: ${telegramId}`);
+  }
+
+  const prevStatus = user.kycStatus;
+  user.kycStatus = 'VERIFIED';
+  user.kycVerifiedAt = new Date();
+  await user.save();
+
+  await ctx.reply(
+    `✅ <b>User KYC Updated</b>\n\nTelegram ID: <code>${telegramId}</code>\nUsername: @${user.username || 'N/A'}\nPrevious Status: ${prevStatus}\nNew Status: VERIFIED\nVerified At: ${user.kycVerifiedAt.toLocaleString()}`,
+    { parse_mode: 'HTML' }
+  );
+}
+
 module.exports = {
   pendingOrdersHandler,
   setrateHandler,
   statsHandler,
-  balanceHandler
+  balanceHandler,
+  verifyUserHandler
 };

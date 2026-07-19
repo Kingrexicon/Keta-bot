@@ -3,8 +3,9 @@ const sessionMiddleware = require('../bot/middleware/session');
 const startHandler = require('../bot/handlers/start');
 const { buyHandler, handleAmountEntry, handleChainSelection, handleWalletEntry, handleConfirm } = require('../bot/handlers/buy');
 const { handleClaimPayment, handleRejectPayment, handleCancelClaim, handleConfirmPayment, handleReleaseCrypto, handleResurrectOrder, handleReceiptSubmission } = require('../bot/handlers/payment');
+const { verifyHandler } = require('../bot/handlers/verify');
 const { notifyAdminNewOrder } = require('../services/notificationService');
-const { pendingOrdersHandler, setrateHandler, statsHandler, balanceHandler } = require('../bot/handlers/admin');
+const { pendingOrdersHandler, setrateHandler, statsHandler, balanceHandler, verifyUserHandler } = require('../bot/handlers/admin');
 const { initializeRates } = require('../services/rateService');
 const Order = require('../models/Order');
 
@@ -67,6 +68,10 @@ function createBot() {
   bot.hears('setrate USDT 1630', setrateHandler);
   bot.command('balances', balanceHandler);
   bot.hears('balances', balanceHandler);
+  bot.command('verify', verifyHandler);
+  bot.hears('verify', verifyHandler);
+  bot.hears('🔍 Verify Identity', verifyHandler);
+  bot.command('verifyuser', verifyUserHandler);
   bot.hears('help', async (ctx) => {
     // Quick admin check for sensitive info
     const { isAdminUser } = require('../bot/handlers/payment');
@@ -159,7 +164,7 @@ function createBot() {
     if (!s.step) return;
 
     // Don't re-process messages already handled by bot.hears() menu handlers
-    const menuButtons = ['🟢 Buy Crypto', '🔴 Sell Crypto', '📈 Rates', '📜 My Orders', 'pending', 'stats', 'balances', 'setrate USDT 1630', 'help'];
+    const menuButtons = ['🟢 Buy Crypto', '🔴 Sell Crypto', '📈 Rates', '📜 My Orders', '🔍 Verify Identity', 'pending', 'stats', 'balances', 'setrate USDT 1630', 'help'];
     if (menuButtons.includes(ctx.message.text)) return;
 
     switch (s.step) {

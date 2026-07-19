@@ -15,6 +15,10 @@ const userSchema = new mongoose.Schema({
     enum: ['PENDING', 'VERIFIED', 'REJECTED'],
     default: 'PENDING'
   },
+  kycVerifiedAt: {
+    type: Date,
+    default: null
+  },
   createdAt: {
     type: Date,
     default: Date.now

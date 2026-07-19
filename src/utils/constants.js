@@ -11,7 +11,7 @@ const NETWORKS = {
 
 // Chain options combining coin + network
 const CHAINS = {
-  'USDC-BASE': 'USDC-BASE',
+  'USDC': 'USDC-BASE',
   'ETH-ERC20': 'ETH-ERC20',
   'USDT-ERC20': 'USDT-ERC20'
 };
@@ -30,11 +30,21 @@ const ORDER_EXPIRY_MINUTES = 30;
 
 const FEE = 500;
 
+// USD buy limits
+const MIN_BUY_USD = 20;
+const LARGE_BUY_USD_THRESHOLD = 100;
+
+// DeepIDV verification link (replace with actual DeepIDV URL)
+const DEEPIDV_URL = 'https://deepidv.com/verify';
+
 module.exports = {
   COINS,
   NETWORKS,
   CHAINS,
   ORDER_STATUS,
   ORDER_EXPIRY_MINUTES,
-  FEE
+  FEE,
+  MIN_BUY_USD,
+  LARGE_BUY_USD_THRESHOLD,
+  DEEPIDV_URL
 };

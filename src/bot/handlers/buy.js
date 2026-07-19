@@ -5,6 +5,8 @@ const { notifyAdminNewOrder } = require('../../services/notificationService');
 const { CHAINS } = require('../../utils/constants');
 const { validateWalletAddress } = require('../../utils/validators');
 const { chainMenu, cancelMenu, confirmMenu, mainMenu } = require('../keyboards/mainMenu');
+const User = require('../../models/User');
+const { MIN_BUY_USD, LARGE_BUY_USD_THRESHOLD, DEEPIDV_URL } = require('../../utils/constants');
 
 async function buyHandler(ctx) {
   ctx.session.orderFlow = { type: 'BUY' };
@@ -93,9 +95,19 @@ async function handleWalletEntry(ctx) {
 
   const fiatAmount = ctx.session.orderFlow.fiatAmount;
   const cryptoAmount = Math.floor((fiatAmount / rate.buyRate) * 10000) / 10000;
+  const usdEquivalent = Math.floor((cryptoAmount * rate.usdPrice) * 100) / 100;
+
+  // Enforce minimum $20 USD buy
+  if (usdEquivalent < MIN_BUY_USD) {
+    return ctx.reply(
+      `❌ Minimum buy is <b>$${MIN_BUY_USD}</b> (~₦${(MIN_BUY_USD * rate.buyRate / rate.usdPrice).toLocaleString()}).\n\nPlease enter a higher amount.`,
+      { parse_mode: 'HTML', ...cancelMenu() }
+    );
+  }
 
   ctx.session.orderFlow.rate = rate.buyRate;
   ctx.session.orderFlow.cryptoAmount = cryptoAmount;
+  ctx.session.orderFlow.usdEquivalent = usdEquivalent;
 
   const summary = `
 <b>Order Summary</b>
@@ -127,6 +139,29 @@ async function handleConfirm(ctx) {
   }
 
   const flow = ctx.session.orderFlow;
+
+  // Large-buy verification gate (> $100 USD requires verified KYC)
+  if (flow.usdEquivalent > LARGE_BUY_USD_THRESHOLD) {
+    const user = await User.findOne({ telegramId: ctx.from.id });
+    if (!user || user.kycStatus !== 'VERIFIED') {
+      ctx.session.orderFlow = null;
+      ctx.session.step = null;
+
+      if (!user) {
+        return ctx.reply(
+          `❌ <b>Verification Required</b>\n\nOrders above <b>$${LARGE_BUY_USD_THRESHOLD}</b> require identity verification (DeepIDV).\n\nNo account found. Please use /start to create an account first, then verify your identity.`,
+          { parse_mode: 'HTML', ...mainMenu() }
+        );
+      }
+
+      return ctx.reply(
+        `❌ <b>Verification Required</b>\n\nThis order is worth <b>~$${flow.usdEquivalent}</b>, which is above the <b>$${LARGE_BUY_USD_THRESHOLD}</b> threshold.\n\nYou must complete <b>DeepIDV identity verification</b> before purchasing this amount.\n\nTap the button below to verify now:`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([
+          [Markup.button.url('🔍 Verify with DeepIDV', DEEPIDV_URL)]
+        ]) }
+      );
+    }
+  }
 
   const order = await createOrder(
     ctx.from.id,

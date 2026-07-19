@@ -3,7 +3,8 @@ const { Markup } = require('telegraf');
 const mainMenu = () =>
   Markup.keyboard([
     ['🟢 Buy Crypto', '🔴 Sell Crypto'],
-    ['📜 My Orders', '📈 Rates']
+    ['📜 My Orders', '📈 Rates'],
+    ['🔍 Verify Identity']
   ]).resize();
 
 const chainMenu = () =>
@@ -31,6 +32,7 @@ const combinedAdminMenu = () =>
   Markup.keyboard([
     ['🟢 Buy Crypto', '🔴 Sell Crypto'],
     ['📜 My Orders', '📈 Rates'],
+    ['🔍 Verify Identity'],
     ['pending', 'stats', 'balances'],
     ['setrate USDT 1630', 'help']
   ]).resize();
