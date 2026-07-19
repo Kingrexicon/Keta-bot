@@ -12,7 +12,7 @@ async function buyHandler(ctx) {
   ctx.session.orderFlow = { type: 'BUY' };
   ctx.session.step = 'ENTER_AMOUNT';
   await ctx.reply(
-    'How much Naira (NGN) do you want to spend?\n\nEnter amount as a number (e.g. 50000):',
+    'How much worth of crypto in <b>$USD</b> do you want to buy? Enter amount as a number (e.g. 50)\n\n📌 Minimum buy is $20\n⚠️ Orders above $100 require identity verification',
     { parse_mode: 'HTML', ...cancelMenu() }
   );
 }
@@ -20,24 +20,30 @@ async function buyHandler(ctx) {
 async function handleAmountEntry(ctx) {
   const amount = ctx.message.text.trim();
 
-  // Check for cancel first
   if (amount === 'Cancel') {
     ctx.session.orderFlow = null;
     ctx.session.step = null;
     return ctx.reply('Order cancelled.', { ...mainMenu() });
   }
 
-  const parsedAmount = parseFloat(amount);
+  const usdAmount = parseFloat(amount);
 
-  if (isNaN(parsedAmount) || parsedAmount <= 0) {
+  if (isNaN(usdAmount) || usdAmount <= 0) {
     return ctx.reply('Invalid amount. Please enter a valid number.', { ...cancelMenu() });
   }
 
-  ctx.session.orderFlow.fiatAmount = parsedAmount;
+  if (usdAmount < MIN_BUY_USD) {
+    return ctx.reply(
+      `❌ Minimum buy is <b>$${MIN_BUY_USD}</b>. Please enter a higher amount.`,
+      { parse_mode: 'HTML', ...cancelMenu() }
+    );
+  }
+
+  ctx.session.orderFlow.usdAmount = usdAmount;
   ctx.session.step = 'SELECT_CHAIN';
 
   await ctx.reply(
-    `Amount: <b>₦${parsedAmount.toLocaleString()}</b>\n\nSelect the chain for receiving crypto:`,
+    `Buying: <b>~$${usdAmount.toLocaleString()}</b>\n\nSelect the chain for receiving crypto:`,
     { parse_mode: 'HTML', ...chainMenu() }
   );
 }
@@ -55,11 +61,50 @@ async function handleChainSelection(ctx) {
     return ctx.reply('Invalid chain. Please select from the menu.', { ...chainMenu() });
   }
 
+  const coin = chain.split('-')[0];
+  const rate = await getRate(coin);
+
+  if (!rate) {
+    return ctx.reply('Rate not available. Try again later.');
+  }
+
+  const usdAmount = ctx.session.orderFlow.usdAmount;
+  const fiatAmount = Math.floor(usdAmount * rate.buyRate / rate.usdPrice);
+  const cryptoAmount = Math.floor((fiatAmount / rate.buyRate) * 10000) / 10000;
+
+  // Verification check: only relevant if order is > $100
+  if (usdAmount > LARGE_BUY_USD_THRESHOLD) {
+    const user = await User.findOne({ telegramId: ctx.from.id });
+    if (!user || user.kycStatus !== 'VERIFIED') {
+      ctx.session.orderFlow = null;
+      ctx.session.step = null;
+
+      if (!user) {
+        return ctx.reply(
+          `❌ <b>Verification Required</b>\n\nOrders above <b>$${LARGE_BUY_USD_THRESHOLD}</b> require identity verification (DeepIDV).\n\nNo account found. Please use /start to create an account first, then verify your identity.`,
+          { parse_mode: 'HTML', ...mainMenu() }
+        );
+      }
+
+      return ctx.reply(
+        `❌ <b>Verification Required</b>\n\nThis order is worth <b>~$${usdAmount}</b>, which is above the <b>$${LARGE_BUY_USD_THRESHOLD}</b> threshold.\n\nYou must complete <b>DeepIDV identity verification</b> before purchasing this amount.\n\nTap the button below to verify now:`,
+        { parse_mode: 'HTML', ...Markup.inlineKeyboard([
+          [Markup.button.url('🔍 Verify with DeepIDV', DEEPIDV_URL)]
+        ]) }
+      );
+    }
+  }
+
   ctx.session.orderFlow.chain = chain;
+  ctx.session.orderFlow.fiatAmount = fiatAmount;
+  ctx.session.orderFlow.rate = rate.buyRate;
+  ctx.session.orderFlow.cryptoAmount = cryptoAmount;
   ctx.session.step = 'ENTER_WALLET';
 
   await ctx.reply(
-    `Selected: <b>${chain}</b>\n\nEnter your <b>${chain}</b> wallet address where you want to receive the crypto:`,
+    `Selected: <b>${chain}</b>\n\nAmount you'll pay: <b>₦${fiatAmount.toLocaleString()}</b> (~$${usdAmount})
+
+Enter your <b>${chain}</b> wallet address where you want to receive the crypto:`,
     { parse_mode: 'HTML', ...cancelMenu() }
   );
 }
@@ -85,37 +130,18 @@ async function handleWalletEntry(ctx) {
   ctx.session.orderFlow.walletAddress = walletAddress;
   ctx.session.step = 'CONFIRM_ORDER';
 
-  // Get rate for the coin portion of the chain
-  const coin = chain.split('-')[0]; // e.g. "USDT-TRC20" -> "USDT"
-  const rate = await getRate(coin);
+  const flow = ctx.session.orderFlow;
 
-  if (!rate) {
-    return ctx.reply('Rate not available. Try again later.');
-  }
-
-  const fiatAmount = ctx.session.orderFlow.fiatAmount;
-  const cryptoAmount = Math.floor((fiatAmount / rate.buyRate) * 10000) / 10000;
-  const usdEquivalent = Math.floor((cryptoAmount * rate.usdPrice) * 100) / 100;
-
-  // Enforce minimum $20 USD buy
-  if (usdEquivalent < MIN_BUY_USD) {
-    return ctx.reply(
-      `❌ Minimum buy is <b>$${MIN_BUY_USD}</b> (~₦${(MIN_BUY_USD * rate.buyRate / rate.usdPrice).toLocaleString()}).\n\nPlease enter a higher amount.`,
-      { parse_mode: 'HTML', ...cancelMenu() }
-    );
-  }
-
-  ctx.session.orderFlow.rate = rate.buyRate;
-  ctx.session.orderFlow.cryptoAmount = cryptoAmount;
-  ctx.session.orderFlow.usdEquivalent = usdEquivalent;
+  const coin = chain.split('-')[0];
 
   const summary = `
 <b>Order Summary</b>
 
-Amount to send: <b>₦${fiatAmount.toLocaleString()}</b>
+Buying: <b>~$${flow.usdAmount}</b>
+Amount to send: <b>₦${flow.fiatAmount.toLocaleString()}</b>
 Chain: <b>${chain}</b>
-You will receive: <b>${cryptoAmount} ${coin}</b>
-Rate: <b>₦${rate.buyRate.toLocaleString()}</b>
+You will receive: <b>${flow.cryptoAmount} ${coin}</b>
+Rate: <b>₦${flow.rate.toLocaleString()}</b>
 Wallet: <code>${walletAddress}</code>
 
 Confirm this order?
@@ -140,29 +166,6 @@ async function handleConfirm(ctx) {
 
   const flow = ctx.session.orderFlow;
 
-  // Large-buy verification gate (> $100 USD requires verified KYC)
-  if (flow.usdEquivalent > LARGE_BUY_USD_THRESHOLD) {
-    const user = await User.findOne({ telegramId: ctx.from.id });
-    if (!user || user.kycStatus !== 'VERIFIED') {
-      ctx.session.orderFlow = null;
-      ctx.session.step = null;
-
-      if (!user) {
-        return ctx.reply(
-          `❌ <b>Verification Required</b>\n\nOrders above <b>$${LARGE_BUY_USD_THRESHOLD}</b> require identity verification (DeepIDV).\n\nNo account found. Please use /start to create an account first, then verify your identity.`,
-          { parse_mode: 'HTML', ...mainMenu() }
-        );
-      }
-
-      return ctx.reply(
-        `❌ <b>Verification Required</b>\n\nThis order is worth <b>~$${flow.usdEquivalent}</b>, which is above the <b>$${LARGE_BUY_USD_THRESHOLD}</b> threshold.\n\nYou must complete <b>DeepIDV identity verification</b> before purchasing this amount.\n\nTap the button below to verify now:`,
-        { parse_mode: 'HTML', ...Markup.inlineKeyboard([
-          [Markup.button.url('🔍 Verify with DeepIDV', DEEPIDV_URL)]
-        ]) }
-      );
-    }
-  }
-
   const order = await createOrder(
     ctx.from.id,
     ctx.from.username || '',
@@ -171,7 +174,6 @@ async function handleConfirm(ctx) {
     flow.rate
   );
 
-  // Save wallet address on the order
   order.walletAddress = flow.walletAddress;
   await order.save();
 
@@ -200,7 +202,6 @@ After sending, tap the button below to notify us.
     ])
   });
 
-  // Send a separate message to reset the keyboard back to the main menu
   await ctx.reply('Use the menu below to continue:', { ...mainMenu() });
 
   ctx.session.orderFlow = null;
