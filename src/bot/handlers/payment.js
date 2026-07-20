@@ -1,6 +1,6 @@
 const Order = require('../../models/Order');
 const Admin = require('../../models/Admin');
-const { claimPayment, rejectPayment, cancelClaim, verifyOrder, releaseOrder, rollbackRelease, failOrder, setTxHash, setReleaseButtonInfo, logPayoutAttempt, resurrectOrder } = require('../../services/orderService');
+const { claimPayment, rejectPayment, cancelClaim, verifyOrder, unverifyOrder, releaseOrder, rollbackRelease, failOrder, setTxHash, setReleaseButtonInfo, logPayoutAttempt, resurrectOrder } = require('../../services/orderService');
 const { releaseCrypto } = require('../../services/paymentService');
 const { notifyAdminPaymentClaimed, notifyAdminPaymentClaimCancelled, notifyUserPaymentUnderReview, notifyUserPaymentVerified, notifyUserCryptoReleased, notifyUserPaymentRejected, notifyAdminPayoutFailed } = require('../../services/notificationService');
 const { Markup } = require('telegraf');
@@ -170,11 +170,11 @@ async function handleConfirmPayment(ctx) {
 <b>Wallet:</b> <code>${updated.walletAddress}</code>
 <b>Verified by:</b> @${ctx.from.username || ctx.from.id}
 
-Tap "Release Crypto" to send the crypto to the user's wallet.
+Tap "Release Crypto" to send the crypto to the user's wallet, or "Back" to return to payment claimed state.
   `;
 
   const releaseKeyboard = Markup.inlineKeyboard([
-    [Markup.button.callback('🚀 Release Crypto', `release_crypto_${updated.orderRef}`)]
+    [Markup.button.callback('🚀 Release Crypto', `release_crypto_${updated.orderRef}`), Markup.button.callback('⬅️ Back', `back_to_claimed_${updated.orderRef}`)]
   ]);
 
   const sentMessage = await ctx.editMessageText(releaseButtonMessage, {
@@ -189,6 +189,50 @@ Tap "Release Crypto" to send the crypto to the user's wallet.
 
   // Notify the user
   await notifyUserPaymentVerified(ctx, updated.clientTelegramId, updated.orderRef);
+}
+
+/**
+ * Handle "Back to Claimed" button — admin moves a verified order back to payment_claimed
+ * Called via callback_query: back_to_claimed_{orderRef}
+ */
+async function handleBackToClaimed(ctx) {
+  if (!(await isAdminUser(ctx.from.id))) {
+    return ctx.answerCbQuery('❌ Unauthorized. Admin only.');
+  }
+
+  const orderRef = ctx.callbackQuery.data.replace('back_to_claimed_', '');
+
+  // Atomic status guard: only 'verified' orders can go back to 'payment_claimed'
+  const updated = await unverifyOrder(orderRef);
+
+  if (!updated) {
+    return ctx.answerCbQuery('❌ Order is not in verified state or already processed.');
+  }
+
+  // Edit message back to payment_claimed view with confirm/reject buttons
+  const backMessage = `
+🔔 <b>PAYMENT CLAIMED</b>
+
+<b>Order:</b> <code>${updated.orderRef}</code>
+<b>User:</b> @${updated.clientUsername || updated.clientTelegramId}
+<b>Chain:</b> ${updated.chain}
+<b>Amount:</b> ₦${updated.fiatAmount.toLocaleString()}
+<b>Crypto:</b> ${updated.cryptoAmount} ${updated.chain.split('-')[0]}
+<b>Wallet:</b> <code>${updated.walletAddress}</code>
+
+Order returned to <b>Payment Claimed</b>. Confirm or reject payment.
+  `;
+
+  const backKeyboard = Markup.inlineKeyboard([
+    [Markup.button.callback('✅ Confirm Payment', `confirm_payment_${updated.orderRef}`), Markup.button.callback('❌ Reject', `reject_payment_${updated.orderRef}`)]
+  ]);
+
+  await ctx.editMessageText(backMessage, {
+    parse_mode: 'HTML',
+    ...backKeyboard
+  });
+
+  await ctx.answerCbQuery('✅ Order returned to Payment Claimed.');
 }
 
 /**
@@ -381,5 +425,6 @@ module.exports = {
   handleReleaseCrypto,
   handleResurrectOrder,
   handleReceiptSubmission,
+  handleBackToClaimed,
   isAdminUser
 };

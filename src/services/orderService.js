@@ -89,6 +89,19 @@ async function releaseOrder(orderRef, adminId) {
 }
 
 /**
+ * Atomic status-guarded update: admin unverifies a verified order (moves it back to payment_claimed)
+ * Only succeeds if order is currently in 'verified' state
+ */
+async function unverifyOrder(orderRef) {
+  const order = await Order.findOneAndUpdate(
+    { orderRef, status: ORDER_STATUS.VERIFIED },
+    { $set: { status: ORDER_STATUS.PAYMENT_CLAIMED, verifiedBy: null, verifiedAt: null } },
+    { returnDocument: 'after' }
+  );
+  return order;
+}
+
+/**
  * Rollback release if payout fails — set status back to 'verified' so admin can retry
  */
 async function rollbackRelease(orderRef) {
@@ -205,6 +218,7 @@ module.exports = {
   rejectPayment,
   cancelClaim,
   verifyOrder,
+  unverifyOrder,
   releaseOrder,
   rollbackRelease,
   failOrder,

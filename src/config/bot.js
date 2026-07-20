@@ -2,7 +2,7 @@ const { Telegraf, session } = require('telegraf');
 const sessionMiddleware = require('../bot/middleware/session');
 const startHandler = require('../bot/handlers/start');
 const { buyHandler, handleAmountEntry, handleChainSelection, handleWalletEntry, handleConfirm } = require('../bot/handlers/buy');
-const { handleClaimPayment, handleRejectPayment, handleCancelClaim, handleConfirmPayment, handleReleaseCrypto, handleResurrectOrder, handleReceiptSubmission } = require('../bot/handlers/payment');
+const { handleClaimPayment, handleRejectPayment, handleCancelClaim, handleConfirmPayment, handleReleaseCrypto, handleResurrectOrder, handleReceiptSubmission, handleBackToClaimed } = require('../bot/handlers/payment');
 const { verifyHandler } = require('../bot/handlers/verify');
 const { notifyAdminNewOrder } = require('../services/notificationService');
 const { pendingOrdersHandler, startRateUpdateHandler, selectRateCoinHandler, handleRateInput, confirmRateHandler, cancelRateHandler, statsHandler, balanceHandler, verifyUserHandler } = require('../bot/handlers/admin');
@@ -151,6 +151,9 @@ function createBot() {
 
   // Admin callback: resurrect expired order
   bot.action(/resurrect_order_/, handleResurrectOrder);
+
+  // Admin callback: back from verified to payment_claimed
+  bot.action(/back_to_claimed_/, handleBackToClaimed);
 
   // Handle photo messages (receipt screenshots)
   bot.on('photo', async (ctx) => {
