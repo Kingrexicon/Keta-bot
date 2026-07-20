@@ -64,12 +64,13 @@ async function handleChainSelection(ctx) {
   const coin = chain.split('-')[0];
   const rate = await getRate(coin);
 
-  if (!rate || !rate.usdPrice || rate.usdPrice <= 0) {
+  if (!rate || !rate.buyRate || rate.buyRate <= 0) {
     return ctx.reply('Rate not available. Try again later.');
   }
 
+  const usdPrice = rate.usdPrice > 0 ? rate.usdPrice : (coin === 'ETH' ? 3400 : 1);
   const usdAmount = ctx.session.orderFlow.usdAmount;
-  const fiatAmount = Math.floor(usdAmount * rate.buyRate / rate.usdPrice);
+  const fiatAmount = Math.floor(usdAmount * rate.buyRate / usdPrice);
 
   if (!isFinite(fiatAmount) || fiatAmount <= 0) {
     return ctx.reply('Unable to calculate amount. Please try again or contact support.');
