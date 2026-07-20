@@ -5,7 +5,7 @@ const { buyHandler, handleAmountEntry, handleChainSelection, handleWalletEntry, 
 const { handleClaimPayment, handleRejectPayment, handleCancelClaim, handleConfirmPayment, handleReleaseCrypto, handleResurrectOrder, handleReceiptSubmission } = require('../bot/handlers/payment');
 const { verifyHandler } = require('../bot/handlers/verify');
 const { notifyAdminNewOrder } = require('../services/notificationService');
-const { pendingOrdersHandler, setrateHandler, statsHandler, balanceHandler, verifyUserHandler } = require('../bot/handlers/admin');
+const { pendingOrdersHandler, startRateUpdateHandler, selectRateCoinHandler, handleRateInput, confirmRateHandler, cancelRateHandler, statsHandler, balanceHandler, verifyUserHandler } = require('../bot/handlers/admin');
 const { initializeRates } = require('../services/rateService');
 const Order = require('../models/Order');
 
@@ -64,8 +64,11 @@ function createBot() {
   bot.hears('pending', pendingOrdersHandler);
   bot.command('stats', statsHandler);
   bot.hears('stats', statsHandler);
-  bot.command('setrate', setrateHandler);
-  bot.hears('setrate', setrateHandler);
+  bot.command('setrate', startRateUpdateHandler);
+  bot.hears('setrate', startRateUpdateHandler);
+  bot.action(/^setrate_coin_(USDT|USDC|ETH)$/, selectRateCoinHandler);
+  bot.action('setrate_confirm', confirmRateHandler);
+  bot.action('setrate_cancel', cancelRateHandler);
   bot.command('balances', balanceHandler);
   bot.hears('balances', balanceHandler);
   bot.command('verify', verifyHandler);
@@ -119,7 +122,7 @@ function createBot() {
     message += `<b>Admin Commands</b>\n`;
     message += `pending - View pending orders\n`;
     message += `stats - Order statistics\n`;
-    message += `setrate COIN RATE - Update rates\n`;
+    message += `setrate - Update rates\n`;
     message += `balances - Check wallet balances\n`;
     message += `help - Show this message\n`;
 
@@ -176,6 +179,8 @@ function createBot() {
         return handleWalletEntry(ctx);
       case 'CONFIRM_ORDER':
         return handleConfirm(ctx);
+      case 'ENTER_RATE_UPDATE':
+        return handleRateInput(ctx);
     }
   });
 

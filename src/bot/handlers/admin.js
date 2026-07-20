@@ -6,6 +6,7 @@ const { COINS, ORDER_STATUS } = require('../../utils/constants');
 const { isAdminUser } = require('./payment');
 const { checkNativeBalance, checkTokenBalance } = require('../../services/payoutService');
 const { ethers } = require('ethers');
+const { Markup } = require('telegraf');
 
 async function pendingOrdersHandler(ctx) {
   if (!(await isAdminUser(ctx.from.id))) {
@@ -77,6 +78,104 @@ Sell Rate: <b>₦${sellRate.toLocaleString()}</b>
   `;
 
   await ctx.reply(message, { parse_mode: 'HTML' });
+}
+
+async function startRateUpdateHandler(ctx) {
+  if (!(await isAdminUser(ctx.from.id))) {
+    return ctx.reply('Unauthorized. Admin only.');
+  }
+
+  ctx.session.rateUpdate = null;
+  ctx.session.step = null;
+  return ctx.reply(
+    'Which currency rate would you like to update?',
+    Markup.inlineKeyboard([
+      [Markup.button.callback('USDT', 'setrate_coin_USDT'), Markup.button.callback('USDC', 'setrate_coin_USDC')],
+      [Markup.button.callback('ETH', 'setrate_coin_ETH')],
+      [Markup.button.callback('Cancel', 'setrate_cancel')]
+    ])
+  );
+}
+
+async function selectRateCoinHandler(ctx) {
+  if (!(await isAdminUser(ctx.from.id))) {
+    await ctx.answerCbQuery('Unauthorized. Admin only.');
+    return;
+  }
+
+  const coin = ctx.callbackQuery.data.replace('setrate_coin_', '');
+  if (!Object.values(COINS).includes(coin)) {
+    return ctx.answerCbQuery('Unsupported currency.');
+  }
+
+  ctx.session.rateUpdate = { coin };
+  ctx.session.step = 'ENTER_RATE_UPDATE';
+  await ctx.answerCbQuery();
+  await ctx.reply(`Enter the new NGN buy rate for 1 ${coin}:`);
+}
+
+async function handleRateInput(ctx) {
+  const rate = Number(ctx.message.text.trim());
+  const coin = ctx.session.rateUpdate?.coin;
+  const spread = 40;
+
+  if (!coin || !Object.values(COINS).includes(coin)) {
+    ctx.session.rateUpdate = null;
+    ctx.session.step = null;
+    return ctx.reply('Rate update expired. Tap setrate to start again.');
+  }
+
+  if (!Number.isFinite(rate) || rate <= spread) {
+    return ctx.reply(`Enter a valid rate greater than NGN ${spread}.`);
+  }
+
+  ctx.session.rateUpdate.buyRate = rate;
+  ctx.session.rateUpdate.sellRate = rate - spread;
+  ctx.session.step = 'CONFIRM_RATE_UPDATE';
+
+  return ctx.reply(
+    `<b>Confirm rate update</b>\n\nCoin: <b>${coin}</b>\nBuy Rate: <b>NGN ${rate.toLocaleString()}</b>\nSell Rate: <b>NGN ${(rate - spread).toLocaleString()}</b>`,
+    {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('Confirm', 'setrate_confirm'), Markup.button.callback('Cancel', 'setrate_cancel')]
+      ])
+    }
+  );
+}
+
+async function confirmRateHandler(ctx) {
+  if (!(await isAdminUser(ctx.from.id))) {
+    await ctx.answerCbQuery('Unauthorized. Admin only.');
+    return;
+  }
+
+  const { coin, buyRate, sellRate } = ctx.session.rateUpdate || {};
+  if (!coin || !Number.isFinite(buyRate) || !Number.isFinite(sellRate)) {
+    await ctx.answerCbQuery('Rate update expired.');
+    return ctx.reply('Rate update expired. Tap setrate to start again.');
+  }
+
+  await setRate(coin, buyRate, sellRate);
+  ctx.session.rateUpdate = null;
+  ctx.session.step = null;
+  await ctx.answerCbQuery('Rate updated.');
+  return ctx.reply(
+    `Rate updated: ${coin} buy NGN ${buyRate.toLocaleString()}, sell NGN ${sellRate.toLocaleString()}.\n\n` +
+    'The new rate applies automatically to new orders. Orders already in progress keep their original quoted rate.'
+  );
+}
+
+async function cancelRateHandler(ctx) {
+  if (!(await isAdminUser(ctx.from.id))) {
+    await ctx.answerCbQuery('Unauthorized. Admin only.');
+    return;
+  }
+
+  ctx.session.rateUpdate = null;
+  ctx.session.step = null;
+  await ctx.answerCbQuery('Cancelled.');
+  return ctx.reply('Rate update cancelled.');
 }
 
 async function statsHandler(ctx) {
@@ -194,6 +293,11 @@ async function verifyUserHandler(ctx) {
 module.exports = {
   pendingOrdersHandler,
   setrateHandler,
+  startRateUpdateHandler,
+  selectRateCoinHandler,
+  handleRateInput,
+  confirmRateHandler,
+  cancelRateHandler,
   statsHandler,
   balanceHandler,
   verifyUserHandler
