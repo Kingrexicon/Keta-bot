@@ -65,7 +65,7 @@ What would you like to do?
   await ctx.reply(
     'Need help?',
     Markup.inlineKeyboard([
-      [Markup.button.url('Contact Keta Support', 'https://t.me/kingrexicon')]
+      [Markup.button.url('Contact Keta Support', 'https://wa.me/2349020761615?text=Hello%20KETA.NG')]
     ])
   );
 }

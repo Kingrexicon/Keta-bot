@@ -150,7 +150,7 @@ async function notifyUserPaymentRejected(ctx, userId, orderRef) {
   const keyboard = Markup.inlineKeyboard([
     [Markup.button.callback("I've paid", `claim_payment_${orderRef}`)],
     [Markup.button.callback('New Transaction', 'restart_bot')],
-    [Markup.button.url('Contact Keta Support', 'https://t.me/kingrexicon')]
+    [Markup.button.url('Contact Keta Support', 'https://wa.me/2349020761615?text=Hello%20KETA.NG')]
   ]);
   const message = `❌ <b>Payment Claim Rejected</b>\n\nYour claim for order <code>${orderRef}</code> was not confirmed. If you sent the payment, please try again with the correct payement receipt or contact support.`;
   try {
