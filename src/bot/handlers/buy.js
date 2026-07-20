@@ -196,7 +196,7 @@ Please send <b>₦${flow.fiatAmount.toLocaleString()}</b> to:
 <b>Account Name:</b> ${process.env.ACCOUNT_NAME || 'Your Account'}
 <b>Account Number:</b> <code>${process.env.ACCOUNT_NUMBER || '0123456789'}</code>
 
-<b>⚠️ IMPORTANT:</b> Include <code>${order.orderRef}</code> in the transfer narration/description.
+<b>⚠️ IMPORTANT:</b> Include " <code>${order.orderRef}</code> " in the transfer narration/description.
 
 After sending, tap the button below to notify us.
   `;
@@ -208,7 +208,7 @@ After sending, tap the button below to notify us.
     ])
   });
 
-  await ctx.reply('Use the menu below to continue:', { ...mainMenu() });
+  await ctx.reply('Use the option above 👆 to continue:', { ...mainMenu() });
 
   ctx.session.orderFlow = null;
   ctx.session.step = null;
