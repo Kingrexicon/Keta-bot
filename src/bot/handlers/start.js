@@ -51,8 +51,6 @@ Use the buttons below to manage the bot.
     const welcomeMessage = `
 🎉 <b>Welcome to KetaBot</b>
 
-Your telegram ID: <code>${id}</code>
-
 I'm your crypto exchange bot. Buy and sell USDT, USDC, and ETH on EVM networks with ease.
 
 What would you like to do?
