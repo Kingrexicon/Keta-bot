@@ -20,6 +20,11 @@ const rateSchema = new mongoose.Schema({
     type: Number,
     default: null
   },
+  // Manual prices must survive scheduled live-rate refreshes.
+  isManual: {
+    type: Boolean,
+    default: false
+  },
   updatedAt: {
     type: Date,
     default: Date.now

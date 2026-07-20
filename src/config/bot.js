@@ -65,7 +65,7 @@ function createBot() {
   bot.command('stats', statsHandler);
   bot.hears('stats', statsHandler);
   bot.command('setrate', setrateHandler);
-  bot.hears('setrate USDT 1630', setrateHandler);
+  bot.hears('setrate', setrateHandler);
   bot.command('balances', balanceHandler);
   bot.hears('balances', balanceHandler);
   bot.command('verify', verifyHandler);
@@ -164,7 +164,7 @@ function createBot() {
     if (!s.step) return;
 
     // Don't re-process messages already handled by bot.hears() menu handlers
-    const menuButtons = ['🟢 Buy Crypto', '🔴 Sell Crypto', '📈 Rates', '📜 My Orders', '🔍 Verify Identity', 'pending', 'stats', 'balances', 'setrate USDT 1630', 'help'];
+    const menuButtons = ['🟢 Buy Crypto', '🔴 Sell Crypto', '📈 Rates', '📜 My Orders', '🔍 Verify Identity', 'pending', 'stats', 'balances', 'setrate', 'help'];
     if (menuButtons.includes(ctx.message.text)) return;
 
     switch (s.step) {

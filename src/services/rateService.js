@@ -9,9 +9,22 @@ async function refreshRatesFromApi() {
   try {
     const liveRates = await getAllLiveRates();
     for (const [coin, rates] of Object.entries(liveRates)) {
+      const existingRate = await Rate.findOne({ coin });
+
+      // Preserve a price explicitly set by an administrator.
+      if (existingRate?.isManual) {
+        continue;
+      }
+
       await Rate.findOneAndUpdate(
         { coin },
-        { buyRate: rates.buyRate, sellRate: rates.sellRate, usdPrice: rates.usdPrice, updatedAt: new Date() },
+        {
+          buyRate: rates.buyRate,
+          sellRate: rates.sellRate,
+          usdPrice: rates.usdPrice,
+          isManual: false,
+          updatedAt: new Date()
+        },
         { upsert: true }
       );
     }
@@ -56,7 +69,7 @@ async function getRate(coin) {
 async function setRate(coin, buyRate, sellRate) {
   return Rate.findOneAndUpdate(
     { coin },
-    { buyRate, sellRate, updatedAt: new Date() },
+    { buyRate, sellRate, isManual: true, updatedAt: new Date() },
     { returnDocument: 'after', upsert: true }
   );
 }

@@ -2,7 +2,7 @@ const Order = require('../../models/Order');
 const Admin = require('../../models/Admin');
 const User = require('../../models/User');
 const { setRate, getRate } = require('../../services/rateService');
-const { ORDER_STATUS } = require('../../utils/constants');
+const { COINS, ORDER_STATUS } = require('../../utils/constants');
 const { isAdminUser } = require('./payment');
 const { checkNativeBalance, checkTokenBalance } = require('../../services/payoutService');
 const { ethers } = require('ethers');
@@ -41,22 +41,30 @@ async function setrateHandler(ctx) {
     return ctx.reply('❌ Unauthorized. Admin only.');
   }
 
-  const args = ctx.message.text.split(' ');
+  const args = ctx.message.text.trim().split(/\s+/);
 
   if (args.length < 3) {
-    return ctx.reply('Usage: /setrate USDT 1630');
+    return ctx.reply('Enter the new buy rate with:\n/setrate USDT 1630\n\nSupported coins: ETH, USDT, USDC');
   }
 
   const coin = args[1].toUpperCase();
-  const rate = parseFloat(args[2]);
+  const rate = Number(args[2]);
 
-  if (isNaN(rate) || rate <= 0) {
+  if (!Object.values(COINS).includes(coin)) {
+    return ctx.reply('Unsupported coin. Use ETH, USDT, or USDC.');
+  }
+
+  if (!Number.isFinite(rate) || rate <= 0) {
     return ctx.reply('Invalid rate. Please enter a valid number.');
   }
 
   const spread = 40;
   const buyRate = rate;
   const sellRate = rate - spread;
+
+  if (sellRate <= 0) {
+    return ctx.reply(`Rate must be greater than the ₦${spread} spread.`);
+  }
 
   await setRate(coin, buyRate, sellRate);
 

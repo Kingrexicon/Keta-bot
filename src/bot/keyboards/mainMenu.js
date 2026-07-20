@@ -25,7 +25,7 @@ const confirmMenu = () =>
 const adminMenu = () =>
   Markup.keyboard([
     ['pending', 'stats', 'balances'],
-    ['setrate USDT 1630', 'help']
+    ['setrate', 'help']
   ]).resize();
 
 const combinedAdminMenu = () =>
@@ -34,7 +34,7 @@ const combinedAdminMenu = () =>
     ['📜 My Orders', '📈 Rates'],
     ['🔍 Verify Identity'],
     ['pending', 'stats', 'balances'],
-    ['setrate USDT 1630', 'help']
+    ['setrate', 'help']
   ]).resize();
 
 module.exports = {
