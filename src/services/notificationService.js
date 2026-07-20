@@ -48,11 +48,37 @@ Check your bank app for a matching transfer, then confirm.
     [Markup.button.callback('✅ Confirm Payment', `confirm_payment_${order.orderRef}`)],
     [Markup.button.callback('❌ Reject', `reject_payment_${order.orderRef}`)]
   ]);
+  
 
   await ctx.telegram.sendMessage(adminGroupId, message, {
     parse_mode: 'HTML',
     ...keyboard
   });
+}
+
+/**
+ * Notify the admin group when a user cancels a payment claim.
+ */
+async function notifyAdminPaymentClaimCancelled(ctx, order) {
+  const adminGroupId = process.env.ADMIN_GROUP_ID;
+  if (!adminGroupId) return;
+
+  const message = `
+<b>PAYMENT CLAIM CANCELLED</b>
+
+<b>Order:</b> <code>${order.orderRef}</code>
+<b>User:</b> @${order.clientUsername || order.clientTelegramId}
+<b>Amount:</b> NGN ${order.fiatAmount.toLocaleString()}
+<b>Status:</b> Pending payment
+
+The user cancelled their payment claim and may claim payment again.
+  `;
+
+  try {
+    await ctx.telegram.sendMessage(adminGroupId, message, { parse_mode: 'HTML' });
+  } catch (error) {
+    console.error(`Failed to notify admin about cancelled claim ${order.orderRef}:`, error.message);
+  }
 }
 
 /**
@@ -121,7 +147,10 @@ async function notifyUserOrderExpired(ctx, userId, orderRef) {
  * Notify user that their payment claim was rejected by admin
  */
 async function notifyUserPaymentRejected(ctx, userId, orderRef) {
-  const message = `❌ <b>Payment Claim Rejected</b>\n\nYour claim for order <code>${orderRef}</code> was not confirmed. If you sent the payment, please contact support https://t.me/kingrexicon or you can try again with the correct payement reciept.`;
+  const message = `❌ <b>Payment Claim Rejected</b>\n\nYour claim for order <code>${orderRef}</code> was not confirmed. If you sent the payment, please try again with the correct payement receipt or contact support.`;
+  const keyboard = Markup.inlineKeyboard([
+    [Markup.button.url('Contact Keta Support', 'https://t.me/kingrexicon')]
+  ]);
 
   try {
     await ctx.telegram.sendMessage(userId, message, { parse_mode: 'HTML' });
@@ -201,6 +230,7 @@ function getExplorerLink(txHash, chain) {
 module.exports = {
   notifyAdminNewOrder,
   notifyAdminPaymentClaimed,
+  notifyAdminPaymentClaimCancelled,
   notifyUserPaymentUnderReview,
   notifyUserPaymentVerified,
   notifyUserCryptoReleased,

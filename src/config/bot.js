@@ -25,6 +25,10 @@ function createBot() {
 
   bot.start(startHandler);
   bot.hears('Reset', startHandler);
+  bot.action('restart_bot', async (ctx) => {
+    await ctx.answerCbQuery();
+    return startHandler(ctx);
+  });
 
   // Main menu handlers
   bot.hears('🟢 Buy Crypto', buyHandler);

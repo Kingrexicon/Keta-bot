@@ -2,7 +2,7 @@ const Order = require('../../models/Order');
 const Admin = require('../../models/Admin');
 const { claimPayment, rejectPayment, cancelClaim, verifyOrder, releaseOrder, rollbackRelease, failOrder, setTxHash, setReleaseButtonInfo, logPayoutAttempt, resurrectOrder } = require('../../services/orderService');
 const { releaseCrypto } = require('../../services/paymentService');
-const { notifyAdminPaymentClaimed, notifyUserPaymentUnderReview, notifyUserPaymentVerified, notifyUserCryptoReleased, notifyUserPaymentRejected, notifyAdminPayoutFailed } = require('../../services/notificationService');
+const { notifyAdminPaymentClaimed, notifyAdminPaymentClaimCancelled, notifyUserPaymentUnderReview, notifyUserPaymentVerified, notifyUserCryptoReleased, notifyUserPaymentRejected, notifyAdminPayoutFailed } = require('../../services/notificationService');
 const { Markup } = require('telegraf');
 
 /**
@@ -124,9 +124,17 @@ async function handleCancelClaim(ctx) {
 
   // Edit the user's message to show it's been cancelled
   await ctx.editMessageText(
-    `❌ <b>Claim Cancelled</b>\n\nYour payment claim for order <code>${orderRef}</code> has been cancelled. You can claim again 👆 after sending the payment. Or click the reset button 👇 to make new transactions`,
-    { parse_mode: 'HTML' }
+    `❌ <b>Claim Cancelled</b>\n\nYour payment claim for order <code>${orderRef}</code> has been cancelled.`,
+    {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('✅ I\'ve paid', `claim_payment_${orderRef}`)],
+        [Markup.button.callback('🆕 New Transaction', 'restart_bot')]
+      ])
+    }
   );
+
+  await notifyAdminPaymentClaimCancelled(ctx, updated);
 
   await ctx.answerCbQuery('✅ Claim cancelled. You can try again.');
 }
