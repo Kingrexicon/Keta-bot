@@ -24,6 +24,7 @@ function createBot() {
   bot.use(sessionMiddleware);
 
   bot.start(startHandler);
+  bot.hears('Reset', startHandler);
 
   // Main menu handlers
   bot.hears('🟢 Buy Crypto', buyHandler);
@@ -167,7 +168,7 @@ function createBot() {
     if (!s.step) return;
 
     // Don't re-process messages already handled by bot.hears() menu handlers
-    const menuButtons = ['🟢 Buy Crypto', '🔴 Sell Crypto', '📈 Rates', '📜 My Orders', '🔍 Verify Identity', 'pending', 'stats', 'balances', 'setrate', 'help'];
+    const menuButtons = ['🟢 Buy Crypto', '🔴 Sell Crypto', '📈 Rates', '📜 My Orders', '🔍 Verify Identity', 'pending', 'stats', 'balances', 'setrate', 'help', 'Reset'];
     if (menuButtons.includes(ctx.message.text)) return;
 
     switch (s.step) {

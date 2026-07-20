@@ -1,6 +1,7 @@
 const User = require('../../models/User');
 const Admin = require('../../models/Admin');
 const { mainMenu, combinedAdminMenu } = require('../keyboards/mainMenu');
+const { Markup } = require('telegraf');
 
 async function isAdminUser(telegramId) {
   const admin = await Admin.findOne({ telegramId, active: true });
@@ -10,6 +11,9 @@ async function isAdminUser(telegramId) {
 }
 
 async function startHandler(ctx) {
+  // /start is the safe escape hatch for users stuck in any bot flow.
+  ctx.session = {};
+
   const { id, username, first_name } = ctx.from;
 
   let user = await User.findOne({ telegramId: id });
@@ -59,6 +63,13 @@ What would you like to do?
       ...mainMenu()
     });
   }
+
+  await ctx.reply(
+    'Need help?',
+    Markup.inlineKeyboard([
+      [Markup.button.url('Contact Keta Support', 'https://t.me/kingrexicon')]
+    ])
+  );
 }
 
 module.exports = startHandler;

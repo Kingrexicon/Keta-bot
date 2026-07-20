@@ -4,7 +4,8 @@ const mainMenu = () =>
   Markup.keyboard([
     ['🟢 Buy Crypto', '🔴 Sell Crypto'],
     ['📜 My Orders', '📈 Rates'],
-    ['🔍 Verify Identity']
+    ['🔍 Verify Identity'],
+    ['Reset']
   ]).resize();
 
 const chainMenu = () =>
