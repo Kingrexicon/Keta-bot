@@ -147,13 +147,14 @@ async function notifyUserOrderExpired(ctx, userId, orderRef) {
  * Notify user that their payment claim was rejected by admin
  */
 async function notifyUserPaymentRejected(ctx, userId, orderRef) {
-  const message = `❌ <b>Payment Claim Rejected</b>\n\nYour claim for order <code>${orderRef}</code> was not confirmed. If you sent the payment, please try again with the correct payement receipt or contact support.`;
   const keyboard = Markup.inlineKeyboard([
+    [Markup.button.callback("I've paid", `claim_payment_${orderRef}`)],
+    [Markup.button.callback('New Transaction', 'restart_bot')],
     [Markup.button.url('Contact Keta Support', 'https://t.me/kingrexicon')]
   ]);
-
+  const message = `❌ <b>Payment Claim Rejected</b>\n\nYour claim for order <code>${orderRef}</code> was not confirmed. If you sent the payment, please try again with the correct payement receipt or contact support.`;
   try {
-    await ctx.telegram.sendMessage(userId, message, { parse_mode: 'HTML' });
+    await ctx.telegram.sendMessage(userId, message, { parse_mode: 'HTML', ...keyboard });
   } catch (error) {
     console.error(`Failed to notify user ${userId}:`, error.message);
   }
