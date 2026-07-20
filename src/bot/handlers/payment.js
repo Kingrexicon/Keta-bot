@@ -124,7 +124,7 @@ async function handleCancelClaim(ctx) {
 
   // Edit the user's message to show it's been cancelled
   await ctx.editMessageText(
-    `❌ <b>Claim Cancelled</b>\n\nYour payment claim for order <code>${orderRef}</code> has been cancelled. You can claim again after sending the payment.`,
+    `❌ <b>Claim Cancelled</b>\n\nYour payment claim for order <code>${orderRef}</code> has been cancelled. You can claim again 👆 after sending the payment. Or click the reset button 👇 to make new transactions`,
     { parse_mode: 'HTML' }
   );
 
