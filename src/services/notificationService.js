@@ -223,6 +223,8 @@ function getExplorerLink(txHash, chain) {
     case 'ETH-ERC20':
     case 'USDT-ERC20':
       return `https://etherscan.io/tx/${txHash}`;
+    case 'USDT-SOL':
+      return `https://solscan.io/tx/${txHash}`;
     default:
       return '';
   }

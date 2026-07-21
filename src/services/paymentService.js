@@ -4,7 +4,7 @@
  */
 
 const { validateWalletAddress } = require('../utils/validators');
-const { releaseEVM } = require('./payoutService');
+const { releaseCrypto: releaseCryptoPayout } = require('./payoutService');
 
 /**
  * Release crypto to the user's wallet.
@@ -22,8 +22,8 @@ async function releaseCrypto(order) {
     throw new Error(`Invalid wallet address for chain ${order.chain}: ${order.walletAddress}`);
   }
 
-  // All chains are EVM-based now, dispatch to releaseEVM
-  return releaseEVM(order, order.releasedBy || 0);
+  // Dispatch to chain-specific payout handler (EVM or Solana)
+  return releaseCryptoPayout(order, order.releasedBy || 0);
 }
 
 module.exports = {

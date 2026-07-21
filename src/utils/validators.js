@@ -30,8 +30,16 @@ function validateEVMAddress(address) {
 }
 
 /**
+ * Validate Solana address (base58, 32-44 chars)
+ * Works for Solana mainnet/devnet
+ */
+function validateSolanaAddress(address) {
+  return /^[1-9A-HJ-NP-Za-km-z]{32,44}$/.test(address);
+}
+
+/**
  * Validate wallet address for a given chain.
- * Chain values: 'USDC-BASE', 'ETH-ERC20', 'USDT-ERC20'
+ * Chain values: 'USDC-BASE', 'ETH-ERC20', 'USDT-ERC20', 'USDT-SOL'
  */
 function validateWalletAddress(address, chain) {
   switch (chain) {
@@ -39,6 +47,8 @@ function validateWalletAddress(address, chain) {
     case 'ETH-ERC20':
     case 'USDT-ERC20':
       return validateEVMAddress(address);
+    case 'USDT-SOL':
+      return validateSolanaAddress(address);
     default:
       return false;
   }

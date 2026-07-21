@@ -13,6 +13,8 @@
     "backup": "node -e \"require('dotenv').config(); require('./src/services/backupService').runDailyJob().then(()=>process.exit(0)).catch(()=>process.exit(1))\""
   },
   "dependencies": {
+    "@solana/spl-token": "^0.4.15",
+    "@solana/web3.js": "^1.98.4",
     "dotenv": "^17.4.2",
     "ethers": "^6.17.0",
     "exceljs": "^4.4.0",

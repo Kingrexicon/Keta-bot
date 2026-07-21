@@ -6,14 +6,16 @@ const COINS = {
 
 const NETWORKS = {
   ERC20: 'ERC20',
-  BASE: 'BASE'
+  BASE: 'BASE',
+  SOLANA: 'SOLANA'
 };
 
 // Chain options combining coin + network
 const CHAINS = {
   'USDC': 'USDC-BASE',
   'ETH-ERC20': 'ETH-ERC20',
-  'USDT-ERC20': 'USDT-ERC20'
+  'USDT-ERC20': 'USDT-ERC20',
+  'USDT-SOL': 'USDT-SOL'
 };
 
 const ORDER_STATUS = {
