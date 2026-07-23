@@ -172,20 +172,21 @@ async function handleConfirm(ctx) {
 
   const flow = ctx.session.orderFlow;
 
-  const order = await createOrder(
-    ctx.from.id,
-    ctx.from.username || '',
-    flow.chain,
-    flow.fiatAmount,
-    flow.rate
-  );
+  try {
+    const order = await createOrder(
+      ctx.from.id,
+      ctx.from.username || '',
+      flow.chain,
+      flow.fiatAmount,
+      flow.rate
+    );
 
-  order.walletAddress = flow.walletAddress;
-  await order.save();
+    order.walletAddress = flow.walletAddress;
+    await order.save();
 
-  await notifyAdminNewOrder(ctx, order, ctx.from);
+    await notifyAdminNewOrder(ctx, order, ctx.from);
 
-  const bankDetails = `
+    const bankDetails = `
 ✅ <b>Order Created Successfully!</b>
 
 <b>Order Reference:</b> <code>${order.orderRef}</code>
@@ -213,6 +214,15 @@ After sending, tap the button below to notify us.
   ctx.session.orderFlow = null;
   ctx.session.step = null;
   ctx.session.currentOrderRef = order.orderRef;
+  } catch (error) {
+    console.error('Error creating order:', error.message);
+    await ctx.reply(
+      '❌ Failed to create order. Please try again or contact support.',
+      { ...mainMenu() }
+    );
+    ctx.session.orderFlow = null;
+    ctx.session.step = null;
+  }
 }
 
 module.exports = {

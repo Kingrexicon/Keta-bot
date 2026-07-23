@@ -31,7 +31,7 @@ const orderSchema = new mongoose.Schema({
   },
   chain: {
     type: String,
-    enum: ['USDC-BASE', 'ETH-ERC20', 'USDT-ERC20'],
+    enum: ['USDC-BASE', 'ETH-ERC20', 'USDT-ERC20', 'USDT-SOL'],
     required: true
   },
   fiatAmount: {
