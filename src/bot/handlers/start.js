@@ -51,7 +51,7 @@ Use the buttons below to manage the bot.
     const welcomeMessage = `
 🎉 <b>Welcome to KetaBot</b>
 
-I'm your crypto exchange bot. Buy and sell USDT, USDC, and ETH on EVM networks with ease.
+I'm your crypto exchange bot. Buy and sell USDT on sol network. USDC and ETH on EVM  networks with ease.
 
 What would you like to do?
     `;
