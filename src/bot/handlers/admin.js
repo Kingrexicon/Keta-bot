@@ -4,8 +4,9 @@ const User = require('../../models/User');
 const { setRate, getRate } = require('../../services/rateService');
 const { COINS, ORDER_STATUS } = require('../../utils/constants');
 const { isAdminUser } = require('./payment');
-const { checkNativeBalance, checkTokenBalance } = require('../../services/payoutService');
+const { checkNativeBalance, checkTokenBalance, checkSolanaNativeBalance, checkSolanaTokenBalance, getSolanaConnection, getSolanaWallet } = require('../../services/payoutService');
 const { ethers } = require('ethers');
+const { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL } = require('@solana/web3.js');
 const { Markup } = require('telegraf');
 
 async function pendingOrdersHandler(ctx) {
@@ -214,43 +215,67 @@ async function balanceHandler(ctx) {
   await ctx.reply('🔍 Checking wallet balances across all chains...');
 
   try {
+    // EVM wallet
     const privateKey = process.env.EVM_WALLET_PRIVATE_KEY;
-    if (!privateKey) {
-      return ctx.reply('❌ EVM_WALLET_PRIVATE_KEY not configured.');
-    }
-
-    // Derive wallet address from private key (same address on all EVM chains)
-    const wallet = new ethers.Wallet(privateKey);
-    const walletAddress = wallet.address;
+    const evmWallet = privateKey ? new ethers.Wallet(privateKey) : null;
+    const walletAddress = evmWallet ? evmWallet.address : 'N/A';
 
     const baseRpc = process.env.BASE_MAINNET_RPC_URL;
     const ethRpc = process.env.ETH_MAINNET_RPC_URL;
+    const solRpc = process.env.SOLANA_RPC_URL;
 
     // USDC contract on Base Mainnet
     const USDC_BASE_CONTRACT = '0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913';
     // USDT contract on Ethereum Mainnet
     const USDT_ERC20_CONTRACT = '0xdAC17F958D2ee523a2206206994597C13D831ec7';
+    // USDT SPL Mint on Solana
+    const USDT_SOL_MINT = 'Es9vMFrzaCERmJfrF4H2FYD4KCoNkY11McCe8BenwNYB';
 
-    // Query all balances in parallel
+    // Solana wallet
+    let solWalletAddress = 'N/A';
+    let solBalance = 0;
+    let solUsdtBalance = 0;
+    try {
+      const solWallet = getSolanaWallet();
+      solWalletAddress = solWallet.publicKey.toString();
+      if (solRpc) {
+        const connection = getSolanaConnection(solRpc);
+        const [sol, usdt] = await Promise.all([
+          checkSolanaNativeBalance(solWallet.publicKey, connection),
+          checkSolanaTokenBalance(solWallet.publicKey, USDT_SOL_MINT, connection)
+        ]);
+        solBalance = sol;
+        solUsdtBalance = usdt;
+      }
+    } catch (err) {
+      // Solana not configured, skip
+    }
+
+    // Query EVM balances in parallel
     const [baseEth, baseUsdc, ethEth, ethUsdt] = await Promise.all([
-      baseRpc ? checkNativeBalance(walletAddress, baseRpc) : Promise.resolve('N/A'),
-      baseRpc ? checkTokenBalance(walletAddress, USDC_BASE_CONTRACT, baseRpc) : Promise.resolve('N/A'),
-      ethRpc ? checkNativeBalance(walletAddress, ethRpc) : Promise.resolve('N/A'),
-      ethRpc ? checkTokenBalance(walletAddress, USDT_ERC20_CONTRACT, ethRpc) : Promise.resolve('N/A')
+      privateKey && baseRpc ? checkNativeBalance(walletAddress, baseRpc) : Promise.resolve('N/A'),
+      privateKey && baseRpc ? checkTokenBalance(walletAddress, USDC_BASE_CONTRACT, baseRpc) : Promise.resolve('N/A'),
+      privateKey && ethRpc ? checkNativeBalance(walletAddress, ethRpc) : Promise.resolve('N/A'),
+      privateKey && ethRpc ? checkTokenBalance(walletAddress, USDT_ERC20_CONTRACT, ethRpc) : Promise.resolve('N/A')
     ]);
 
     const message = `
 💰 <b>Hot Wallet Balances</b>
 
-<code>${walletAddress}</code>
-
 <b>Base Mainnet:</b>
-  ETH (gas): ${parseFloat(baseEth).toFixed(6)}
-  USDC: ${parseFloat(baseUsdc).toFixed(2)}
+  <code>${evmWallet ? walletAddress : 'N/A'}</code>
+  ETH (gas): ${typeof baseEth === 'number' ? parseFloat(baseEth).toFixed(6) : baseEth}
+  USDC: ${typeof baseUsdc === 'number' ? parseFloat(baseUsdc).toFixed(2) : baseUsdc}
 
 <b>Ethereum Mainnet:</b>
-  ETH (gas): ${parseFloat(ethEth).toFixed(6)}
-  USDT: ${parseFloat(ethUsdt).toFixed(2)}
+  <code>${evmWallet ? walletAddress : 'N/A'}</code>
+  ETH (gas): ${typeof ethEth === 'number' ? parseFloat(ethEth).toFixed(6) : ethEth}
+  USDT: ${typeof ethUsdt === 'number' ? parseFloat(ethUsdt).toFixed(2) : ethUsdt}
+
+<b>Solana Mainnet:</b>
+  <code>${solWalletAddress}</code>
+  SOL (gas): ${parseFloat(solBalance).toFixed(6)}
+  USDT: ${parseFloat(solUsdtBalance).toFixed(2)}
     `;
 
     await ctx.reply(message, { parse_mode: 'HTML' });

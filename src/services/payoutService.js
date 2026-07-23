@@ -412,5 +412,8 @@ module.exports = {
   checkSolanaTokenBalance,
   transferNative,
   transferToken,
-  transferSplToken
+  transferSplToken,
+  // Exported for admin balance checks
+  getSolanaConnection,
+  getSolanaWallet
 };
