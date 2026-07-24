@@ -202,7 +202,7 @@ async function transferToken(wallet, toAddress, contractAddress, amount, decimal
 // ──────────────────────────────────────────────
 
 /**
- * Transfer SPL token (USDT-SOL)
+ * Transfer SPL token (USDT-SOL) with retry logic for blockhash expiry
  */
 async function transferSplToken(wallet, toAddress, mintAddress, amount, decimals) {
   const connection = getSolanaConnection(CHAIN_CONFIG['USDT-SOL'].rpcUrl());
@@ -224,46 +224,85 @@ async function transferSplToken(wallet, toAddress, mintAddress, amount, decimals
 
   const amountInSmallestUnit = Math.floor(amount * Math.pow(10, decimals));
 
-  // Build and send transaction
+  // Build base transaction instructions (reusable across retries)
   const { Transaction } = require('@solana/web3.js');
-  const transaction = new Transaction();
 
-  // Check if recipient ATA exists; if not, add instruction to create it
-  try {
-    await getAccount(connection, recipientAta);
-  } catch (err) {
-    // Recipient ATA doesn't exist — add create instruction (hot wallet pays rent)
-    transaction.add(
-      createAssociatedTokenAccountInstruction(
-        wallet.publicKey,
-        recipientAta,
-        toPubkey,
-        mintPubkey
-      )
+  const MAX_RETRIES = 3;
+
+  for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
+    // Fetch a fresh recent blockhash using 'confirmed' commitment (faster than 'finalized')
+    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+
+    const transaction = new Transaction();
+
+    // Check if recipient ATA exists; if not, add instruction to create it
+    // (re-checked each retry in case it was created in the meantime)
+    try {
+      await getAccount(connection, recipientAta);
+    } catch (err) {
+      // Recipient ATA doesn't exist — add create instruction (hot wallet pays rent)
+      transaction.add(
+        createAssociatedTokenAccountInstruction(
+          wallet.publicKey,
+          recipientAta,
+          toPubkey,
+          mintPubkey
+        )
+      );
+    }
+
+    // Build transfer instruction
+    const transferIx = createTransferInstruction(
+      senderAta,
+      recipientAta,
+      wallet.publicKey,
+      amountInSmallestUnit
     );
+    transaction.add(transferIx);
+
+    transaction.recentBlockhash = blockhash;
+    transaction.feePayer = wallet.publicKey;
+    transaction.sign(wallet);
+
+    // Send raw transaction
+    const rawTx = transaction.serialize();
+    const signature = await connection.sendRawTransaction(rawTx, {
+      skipPreflight: false,
+      preflightCommitment: 'confirmed',
+      maxRetries: 0 // we handle retries ourselves
+    });
+
+    // Confirm with proper timeout handling
+    try {
+      const confirmation = await connection.confirmTransaction({
+        signature,
+        blockhash,
+        lastValidBlockHeight
+      }, 'confirmed');
+
+      if (confirmation.value.err) {
+        throw new Error(`Transaction failed: ${confirmation.value.err.toString()}`);
+      }
+
+      return signature;
+    } catch (err) {
+      const errMsg = err.message || err.toString();
+
+      // If blockhash expired and we have retries left, try again with a fresh blockhash
+      if (errMsg.includes('block height exceeded') || errMsg.includes('BlockhashNotFound')) {
+        if (attempt < MAX_RETRIES) {
+          console.warn(`[transferSplToken] Blockhash expired on attempt ${attempt}/${MAX_RETRIES}. Retrying with fresh blockhash...`);
+          // Small delay before retry (exponential backoff)
+          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+          continue;
+        }
+        throw new Error(`Block height exceeded after ${MAX_RETRIES} retries. Please try again.`);
+      }
+
+      // For other errors, throw immediately
+      throw err;
+    }
   }
-
-  // Build transfer instruction
-  const transferIx = createTransferInstruction(
-    senderAta,
-    recipientAta,
-    wallet.publicKey,
-    amountInSmallestUnit
-  );
-  transaction.add(transferIx);
-
-  // Fetch a fresh recent blockhash to avoid "block height exceeded" errors
-  const { blockhash } = await connection.getLatestBlockhash('finalized');
-  transaction.recentBlockhash = blockhash;
-  transaction.feePayer = wallet.publicKey;
-
-  const signature = await require('@solana/web3.js').sendAndConfirmTransaction(
-    connection,
-    transaction,
-    [wallet]
-  );
-
-  return signature;
 }
 
 // ──────────────────────────────────────────────
