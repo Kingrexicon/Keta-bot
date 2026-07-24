@@ -12,7 +12,7 @@ async function buyHandler(ctx) {
   ctx.session.orderFlow = { type: 'BUY' };
   ctx.session.step = 'ENTER_AMOUNT';
   await ctx.reply(
-    'How much worth of crypto in <b>USD</b> do you want to buy? Enter amount as a number (e.g. 50)\n\n📌 Minimum buy is $20\n⚠️ Orders above $100 require identity verification',
+    'How much worth of crypto in <b>USD</b> do you want to buy? Enter amount as a number (e.g. 50)\n\n📌 Minimum buy is $1\n⚠️ Orders above $100 require identity verification',
     { parse_mode: 'HTML', ...cancelMenu() }
   );
 }

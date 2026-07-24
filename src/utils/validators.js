@@ -57,5 +57,6 @@ function validateWalletAddress(address, chain) {
 module.exports = {
   generateOrderRef,
   validateWalletAddress,
-  validateEVMAddress
+  validateEVMAddress,
+  validateSolanaAddress
 };
