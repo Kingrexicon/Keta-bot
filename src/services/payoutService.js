@@ -252,6 +252,11 @@ async function transferSplToken(wallet, toAddress, mintAddress, amount, decimals
   );
   transaction.add(transferIx);
 
+  // Fetch a fresh recent blockhash to avoid "block height exceeded" errors
+  const { blockhash } = await connection.getLatestBlockhash('finalized');
+  transaction.recentBlockhash = blockhash;
+  transaction.feePayer = wallet.publicKey;
+
   const signature = await require('@solana/web3.js').sendAndConfirmTransaction(
     connection,
     transaction,
