@@ -1,6 +1,6 @@
 const { ethers } = require('ethers');
 const { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL } = require('@solana/web3.js');
-const { getAssociatedTokenAddress, getAccount, createTransferInstruction, getMint } = require('@solana/spl-token');
+const { getAssociatedTokenAddress, getAccount, createTransferInstruction, getMint, createAssociatedTokenAccountInstruction } = require('@solana/spl-token');
 const Order = require('../models/Order');
 const { validateEVMAddress, validateSolanaAddress } = require('../utils/validators');
 const { ORDER_STATUS } = require('../utils/constants');
@@ -219,10 +219,29 @@ async function transferSplToken(wallet, toAddress, mintAddress, amount, decimals
     throw new Error(`Sender token account does not exist for USDT-SOL: ${senderAta.toString()}`);
   }
 
-  // Get or create recipient ATA
+  // Get recipient ATA address
   const recipientAta = await getAssociatedTokenAddress(mintPubkey, toPubkey);
 
   const amountInSmallestUnit = Math.floor(amount * Math.pow(10, decimals));
+
+  // Build and send transaction
+  const { Transaction } = require('@solana/web3.js');
+  const transaction = new Transaction();
+
+  // Check if recipient ATA exists; if not, add instruction to create it
+  try {
+    await getAccount(connection, recipientAta);
+  } catch (err) {
+    // Recipient ATA doesn't exist — add create instruction (hot wallet pays rent)
+    transaction.add(
+      createAssociatedTokenAccountInstruction(
+        wallet.publicKey,
+        recipientAta,
+        toPubkey,
+        mintPubkey
+      )
+    );
+  }
 
   // Build transfer instruction
   const transferIx = createTransferInstruction(
@@ -231,10 +250,7 @@ async function transferSplToken(wallet, toAddress, mintAddress, amount, decimals
     wallet.publicKey,
     amountInSmallestUnit
   );
-
-  // Build and send transaction
-  const { Transaction } = require('@solana/web3.js');
-  const transaction = new Transaction().add(transferIx);
+  transaction.add(transferIx);
 
   const signature = await require('@solana/web3.js').sendAndConfirmTransaction(
     connection,
