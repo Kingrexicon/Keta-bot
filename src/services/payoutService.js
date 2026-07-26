@@ -266,10 +266,11 @@ async function transferSplToken(wallet, toAddress, mintAddress, amount, decimals
   const { Transaction } = require('@solana/web3.js');
 
   const MAX_RETRIES = 3;
+  let lastSignature = null;
 
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     // Fetch a fresh recent blockhash using 'confirmed' commitment (faster than 'finalized')
-    const { blockhash, lastValidBlockHeight } = await connection.getLatestBlockhash('confirmed');
+    const { blockhash } = await connection.getLatestBlockhash('confirmed');
 
     const transaction = new Transaction();
 
@@ -311,6 +312,7 @@ async function transferSplToken(wallet, toAddress, mintAddress, amount, decimals
         preflightCommitment: 'confirmed',
         maxRetries: 0 // we handle retries ourselves
       });
+      lastSignature = signature;
     } catch (err) {
       if (isRetryableSolanaBlockhashError(err) && attempt < MAX_RETRIES) {
         console.warn(`[transferSplToken] Send failed on attempt ${attempt}/${MAX_RETRIES} due to expiry-related Solana error. Retrying with a fresh blockhash...`);
@@ -326,6 +328,17 @@ async function transferSplToken(wallet, toAddress, mintAddress, amount, decimals
       await confirmSolanaTransaction(connection, signature);
       return signature;
     } catch (err) {
+      // Before retrying, check if the previous attempt's signature actually succeeded on-chain
+      if (lastSignature) {
+        const statuses = await connection.getSignatureStatuses([lastSignature], { searchTransactionHistory: true });
+        const status = statuses?.value?.[0];
+        if (status && !status.err && (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized')) {
+          console.warn(`[transferSplToken] Previous transaction ${lastSignature} was actually confirmed on-chain despite timeout. Returning it.`);
+          return lastSignature;
+        }
+      }
+
+      // Only retry for blockhash expiry errors
       if (isRetryableSolanaBlockhashError(err) && attempt < MAX_RETRIES) {
         console.warn(`[transferSplToken] Confirmation failed on attempt ${attempt}/${MAX_RETRIES} due to expiry-related Solana error. Retrying with a fresh blockhash...`);
         await new Promise(resolve => setTimeout(resolve, 1000 * attempt));

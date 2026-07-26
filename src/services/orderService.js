@@ -81,7 +81,7 @@ async function verifyOrder(orderRef, adminId) {
  */
 async function releaseOrder(orderRef, adminId) {
   const order = await Order.findOneAndUpdate(
-    { orderRef, status: ORDER_STATUS.VERIFIED },
+    { orderRef, status: { $in: [ORDER_STATUS.VERIFIED, ORDER_STATUS.FAILED] } },
     { $set: { status: ORDER_STATUS.RELEASED, releasedBy: adminId, releasedAt: new Date() } },
     { returnDocument: 'after' }
   );
