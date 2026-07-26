@@ -4,6 +4,7 @@ const { claimPayment, rejectPayment, cancelClaim, verifyOrder, unverifyOrder, re
 const { releaseCrypto } = require('../../services/paymentService');
 const { notifyAdminPaymentClaimed, notifyAdminPaymentClaimCancelled, notifyUserPaymentUnderReview, notifyUserPaymentVerified, notifyUserCryptoReleased, notifyUserPaymentRejected, notifyAdminPayoutFailed } = require('../../services/notificationService');
 const { Markup } = require('telegraf');
+const { combinedAdminMenu } = require('../keyboards/mainMenu');
 
 /**
  * Check if a Telegram user is an authorized admin (server-side DB check)
@@ -308,6 +309,9 @@ async function handleReleaseCrypto(ctx) {
 
     // Notify the user with tx hash
     await notifyUserCryptoReleased(ctx, order.clientTelegramId, orderRef, payoutResult.txHash, order.chain);
+
+    // Restore admin menu keyboard
+    await ctx.reply('Use the menu below to continue:', { ...combinedAdminMenu() });
 
     await ctx.answerCbQuery('✅ Crypto released successfully!');
   } else {
