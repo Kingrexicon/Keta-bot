@@ -1,4 +1,5 @@
 const { Markup } = require('telegraf');
+const { mainMenu } = require('../bot/keyboards/mainMenu');
 
 /**
  * Notify admin group about a new order
@@ -124,7 +125,7 @@ Thank you for using KetaBot!
   `;
 
   try {
-    await ctx.telegram.sendMessage(userId, message, { parse_mode: 'HTML' });
+    await ctx.telegram.sendMessage(userId, message, { parse_mode: 'HTML', ...mainMenu() });
   } catch (error) {
     console.error(`Failed to notify user ${userId}:`, error.message);
   }
