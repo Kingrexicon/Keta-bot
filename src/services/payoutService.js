@@ -201,6 +201,18 @@ async function transferToken(wallet, toAddress, contractAddress, amount, decimal
 // Transfer helpers — Solana
 // ──────────────────────────────────────────────
 
+function isRetryableSolanaBlockhashError(err) {
+  const message = (err?.message || err?.toString() || '').toLowerCase();
+
+  return (
+    message.includes('block height exceeded') ||
+    message.includes('blockhash not found') ||
+    message.includes('signature has expired') ||
+    message.includes('transaction was not confirmed in') ||
+    (message.includes('expired') && message.includes('blockhash'))
+  );
+}
+
 /**
  * Transfer SPL token (USDT-SOL) with retry logic for blockhash expiry
  */
@@ -265,12 +277,23 @@ async function transferSplToken(wallet, toAddress, mintAddress, amount, decimals
     transaction.sign(wallet);
 
     // Send raw transaction
-    const rawTx = transaction.serialize();
-    const signature = await connection.sendRawTransaction(rawTx, {
-      skipPreflight: false,
-      preflightCommitment: 'confirmed',
-      maxRetries: 0 // we handle retries ourselves
-    });
+    let signature;
+    try {
+      const rawTx = transaction.serialize();
+      signature = await connection.sendRawTransaction(rawTx, {
+        skipPreflight: false,
+        preflightCommitment: 'confirmed',
+        maxRetries: 0 // we handle retries ourselves
+      });
+    } catch (err) {
+      if (isRetryableSolanaBlockhashError(err) && attempt < MAX_RETRIES) {
+        console.warn(`[transferSplToken] Send failed on attempt ${attempt}/${MAX_RETRIES} due to expiry-related Solana error. Retrying with a fresh blockhash...`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        continue;
+      }
+
+      throw err;
+    }
 
     // Confirm with proper timeout handling
     try {
@@ -286,20 +309,12 @@ async function transferSplToken(wallet, toAddress, mintAddress, amount, decimals
 
       return signature;
     } catch (err) {
-      const errMsg = err.message || err.toString();
-
-      // If blockhash expired and we have retries left, try again with a fresh blockhash
-      if (errMsg.includes('block height exceeded') || errMsg.includes('BlockhashNotFound')) {
-        if (attempt < MAX_RETRIES) {
-          console.warn(`[transferSplToken] Blockhash expired on attempt ${attempt}/${MAX_RETRIES}. Retrying with fresh blockhash...`);
-          // Small delay before retry (exponential backoff)
-          await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
-          continue;
-        }
-        throw new Error(`Block height exceeded after ${MAX_RETRIES} retries. Please try again.`);
+      if (isRetryableSolanaBlockhashError(err) && attempt < MAX_RETRIES) {
+        console.warn(`[transferSplToken] Confirmation failed on attempt ${attempt}/${MAX_RETRIES} due to expiry-related Solana error. Retrying with a fresh blockhash...`);
+        await new Promise(resolve => setTimeout(resolve, 1000 * attempt));
+        continue;
       }
 
-      // For other errors, throw immediately
       throw err;
     }
   }
