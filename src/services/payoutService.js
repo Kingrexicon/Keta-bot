@@ -213,6 +213,32 @@ function isRetryableSolanaBlockhashError(err) {
   );
 }
 
+async function confirmSolanaTransaction(connection, signature, timeoutMs = 60000) {
+  const startTime = Date.now();
+
+  while (Date.now() - startTime < timeoutMs) {
+    const statuses = await connection.getSignatureStatuses([signature], { searchTransactionHistory: true });
+    const status = statuses?.value?.[0];
+
+    if (!status) {
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      continue;
+    }
+
+    if (status.err) {
+      throw new Error(`Transaction failed: ${JSON.stringify(status.err)}`);
+    }
+
+    if (status.confirmationStatus === 'confirmed' || status.confirmationStatus === 'finalized' || status.confirmationStatus === 'processed') {
+      return status;
+    }
+
+    await new Promise(resolve => setTimeout(resolve, 2000));
+  }
+
+  throw new Error(`Transaction confirmation timed out for signature ${signature}`);
+}
+
 /**
  * Transfer SPL token (USDT-SOL) with retry logic for blockhash expiry
  */
@@ -297,16 +323,7 @@ async function transferSplToken(wallet, toAddress, mintAddress, amount, decimals
 
     // Confirm with proper timeout handling
     try {
-      const confirmation = await connection.confirmTransaction({
-        signature,
-        blockhash,
-        lastValidBlockHeight
-      }, 'confirmed');
-
-      if (confirmation.value.err) {
-        throw new Error(`Transaction failed: ${confirmation.value.err.toString()}`);
-      }
-
+      await confirmSolanaTransaction(connection, signature);
       return signature;
     } catch (err) {
       if (isRetryableSolanaBlockhashError(err) && attempt < MAX_RETRIES) {
