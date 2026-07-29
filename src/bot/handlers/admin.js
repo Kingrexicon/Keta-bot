@@ -89,6 +89,31 @@ async function startRateUpdateHandler(ctx) {
   ctx.session.rateUpdate = null;
   ctx.session.step = null;
   return ctx.reply(
+    'Would you like to update the <b>Buy</b> price or the <b>Sell</b> price?',
+    {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [Markup.button.callback('💰 Buy Price', 'setrate_type_buy'), Markup.button.callback('💵 Sell Price', 'setrate_type_sell')],
+        [Markup.button.callback('Cancel', 'setrate_cancel')]
+      ])
+    }
+  );
+}
+
+async function selectRateTypeHandler(ctx) {
+  if (!(await isAdminUser(ctx.from.id))) {
+    await ctx.answerCbQuery('Unauthorized. Admin only.');
+    return;
+  }
+
+  const rateType = ctx.callbackQuery.data.replace('setrate_type_', '');
+  if (rateType !== 'buy' && rateType !== 'sell') {
+    return ctx.answerCbQuery('Invalid selection.');
+  }
+
+  ctx.session.rateUpdate = { rateType };
+  await ctx.answerCbQuery();
+  return ctx.reply(
     'Which currency rate would you like to update?',
     Markup.inlineKeyboard([
       [Markup.button.callback('USDT', 'setrate_coin_USDT'), Markup.button.callback('USDC', 'setrate_coin_USDC')],
@@ -109,16 +134,17 @@ async function selectRateCoinHandler(ctx) {
     return ctx.answerCbQuery('Unsupported currency.');
   }
 
-  ctx.session.rateUpdate = { coin };
+  const rateType = ctx.session.rateUpdate?.rateType || 'buy';
+  ctx.session.rateUpdate.coin = coin;
   ctx.session.step = 'ENTER_RATE_UPDATE';
   await ctx.answerCbQuery();
-  await ctx.reply(`Enter the new NGN buy rate for 1 ${coin}:`);
+  await ctx.reply(`Enter the new NGN ${rateType} rate for 1 ${coin}:`);
 }
 
 async function handleRateInput(ctx) {
   const rate = Number(ctx.message.text.trim());
   const coin = ctx.session.rateUpdate?.coin;
-  const spread = 40;
+  const rateType = ctx.session.rateUpdate?.rateType || 'buy';
 
   if (!coin || !Object.values(COINS).includes(coin)) {
     ctx.session.rateUpdate = null;
@@ -126,16 +152,26 @@ async function handleRateInput(ctx) {
     return ctx.reply('Rate update expired. Tap setrate to start again.');
   }
 
-  if (!Number.isFinite(rate) || rate <= spread) {
-    return ctx.reply(`Enter a valid rate greater than NGN ${spread}.`);
+  if (!Number.isFinite(rate) || rate <= 0) {
+    return ctx.reply('Enter a valid rate greater than 0.');
   }
 
-  ctx.session.rateUpdate.buyRate = rate;
-  ctx.session.rateUpdate.sellRate = rate - spread;
+  // Fetch the current rate from DB to preserve the unchanged side
+  const currentRate = await getRate(coin);
+  const currentBuyRate = currentRate?.buyRate || 0;
+  const currentSellRate = currentRate?.sellRate || 0;
+
+  if (rateType === 'buy') {
+    ctx.session.rateUpdate.buyRate = rate;
+    ctx.session.rateUpdate.sellRate = currentSellRate;
+  } else {
+    ctx.session.rateUpdate.buyRate = currentBuyRate;
+    ctx.session.rateUpdate.sellRate = rate;
+  }
   ctx.session.step = 'CONFIRM_RATE_UPDATE';
 
   return ctx.reply(
-    `<b>Confirm rate update</b>\n\nCoin: <b>${coin}</b>\nBuy Rate: <b>NGN ${rate.toLocaleString()}</b>\nSell Rate: <b>NGN ${(rate - spread).toLocaleString()}</b>`,
+    `<b>Confirm rate update</b>\n\nCoin: <b>${coin}</b>\nBuy Rate: <b>NGN ${ctx.session.rateUpdate.buyRate.toLocaleString()}</b>\nSell Rate: <b>NGN ${ctx.session.rateUpdate.sellRate.toLocaleString()}</b>`,
     {
       parse_mode: 'HTML',
       ...Markup.inlineKeyboard([
@@ -319,6 +355,7 @@ module.exports = {
   pendingOrdersHandler,
   setrateHandler,
   startRateUpdateHandler,
+  selectRateTypeHandler,
   selectRateCoinHandler,
   handleRateInput,
   confirmRateHandler,

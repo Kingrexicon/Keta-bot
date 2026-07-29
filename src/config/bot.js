@@ -5,7 +5,7 @@ const { buyHandler, handleAmountEntry, handleChainSelection, handleWalletEntry, 
 const { handleClaimPayment, handleRejectPayment, handleCancelClaim, handleConfirmPayment, handleReleaseCrypto, handleResurrectOrder, handleReceiptSubmission, handleBackToClaimed } = require('../bot/handlers/payment');
 const { verifyHandler } = require('../bot/handlers/verify');
 const { notifyAdminNewOrder } = require('../services/notificationService');
-const { pendingOrdersHandler, startRateUpdateHandler, selectRateCoinHandler, handleRateInput, confirmRateHandler, cancelRateHandler, statsHandler, balanceHandler, verifyUserHandler } = require('../bot/handlers/admin');
+const { pendingOrdersHandler, startRateUpdateHandler, selectRateTypeHandler, selectRateCoinHandler, handleRateInput, confirmRateHandler, cancelRateHandler, statsHandler, balanceHandler, verifyUserHandler } = require('../bot/handlers/admin');
 const { initializeRates } = require('../services/rateService');
 const Order = require('../models/Order');
 
@@ -71,6 +71,7 @@ function createBot() {
   bot.hears('stats', statsHandler);
   bot.command('setrate', startRateUpdateHandler);
   bot.hears('setrate', startRateUpdateHandler);
+  bot.action(/^setrate_type_(buy|sell)$/, selectRateTypeHandler);
   bot.action(/^setrate_coin_(USDT|USDC|ETH)$/, selectRateCoinHandler);
   bot.action('setrate_confirm', confirmRateHandler);
   bot.action('setrate_cancel', cancelRateHandler);
