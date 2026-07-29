@@ -159,6 +159,51 @@ async function uploadWorkbook(drive, localPath, existingFileId) {
 }
 
 /**
+ * Upload a receipt image to Google Drive
+ * @param {Buffer} imageBuffer - The image binary data
+ * @param {string} filename - The filename to use in Drive (e.g., receipt_orderRef.jpg)
+ * @param {string} mimeType - The MIME type of the image (e.g., image/jpeg)
+ * @returns {{fileId: string, fileLink: string}} - The Drive file ID and viewable link
+ */
+async function uploadReceiptToDrive(imageBuffer, filename, mimeType) {
+  const drive = getDriveClient();
+  const folderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+
+  if (!folderId) {
+    throw new Error('GOOGLE_DRIVE_FOLDER_ID environment variable not set');
+  }
+
+  const fileMetadata = {
+    name: filename,
+    parents: [folderId],
+    description: `Payment receipt uploaded at ${new Date().toISOString()}`
+  };
+
+  const media = {
+    mimeType: mimeType || 'image/jpeg',
+    body: require('stream').Readable.from(imageBuffer)
+  };
+
+  try {
+    const response = await drive.files.create({
+      resource: fileMetadata,
+      media: media,
+      fields: 'id, webViewLink'
+    });
+
+    console.log(`📤 Receipt uploaded to Drive: ${filename} (${response.data.id})`);
+    return {
+      fileId: response.data.id,
+      fileLink: response.data.webViewLink || ''
+    };
+  } catch (error) {
+    console.error('Error uploading receipt to Drive:', error.message);
+    // Don't throw — return empty so caller can still save to MongoDB
+    return { fileId: '', fileLink: '' };
+  }
+}
+
+/**
  * Export unexported Orders to Excel sheet
  * @param {google.drive_v3.Drive} drive - Authenticated Drive client
  * @returns {number} - Number of documents exported
@@ -373,5 +418,6 @@ module.exports = {
   runDailyJob,
   exportAndAppend,
   checkStorageAndPrune,
-  getDriveClient
+  getDriveClient,
+  uploadReceiptToDrive
 };

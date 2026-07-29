@@ -1,6 +1,7 @@
 const Order = require('../../models/Order');
 const Admin = require('../../models/Admin');
 const { claimPayment, rejectPayment, cancelClaim, verifyOrder, unverifyOrder, releaseOrder, rollbackRelease, failOrder, setTxHash, setReleaseButtonInfo, logPayoutAttempt, resurrectOrder } = require('../../services/orderService');
+const { uploadReceiptToDrive } = require('../../services/backupService');
 const { releaseCrypto } = require('../../services/paymentService');
 const { notifyAdminPaymentClaimed, notifyAdminPaymentClaimCancelled, notifyUserPaymentUnderReview, notifyUserPaymentVerified, notifyUserCryptoReleased, notifyUserPaymentRejected, notifyAdminPayoutFailed } = require('../../services/notificationService');
 const { Markup } = require('telegraf');
@@ -77,6 +78,23 @@ async function handleRejectPayment(ctx) {
     `❌ <b>PAYMENT REJECTED</b>\n\n<b>Order:</b> <code>${orderRef}</code>\n<b>Rejected by:</b> @${ctx.from.username || ctx.from.id}\n\nOrder has been reset to pending. The user can retry.`,
     { parse_mode: 'HTML' }
   );
+
+  // Update Payment status to REJECTED
+  try {
+    const Payment = require('../../models/Payment');
+    await Payment.findOneAndUpdate(
+      { orderRef },
+      {
+        $set: {
+          status: 'REJECTED',
+          rejectedBy: ctx.from.id,
+          rejectedAt: new Date()
+        }
+      }
+    );
+  } catch (error) {
+    console.error(`Failed to update Payment status to REJECTED for ${orderRef}:`, error.message);
+  }
 
   // Notify the user
   await notifyUserPaymentRejected(ctx, updated.clientTelegramId, orderRef);
@@ -157,6 +175,23 @@ async function handleConfirmPayment(ctx) {
 
   if (!updated) {
     return ctx.answerCbQuery('❌ Order is not in a claimable state or already processed.');
+  }
+
+  // Update Payment status to VERIFIED
+  try {
+    const Payment = require('../../models/Payment');
+    await Payment.findOneAndUpdate(
+      { orderRef },
+      {
+        $set: {
+          status: 'VERIFIED',
+          verifiedBy: ctx.from.id,
+          verifiedAt: new Date()
+        }
+      }
+    );
+  } catch (error) {
+    console.error(`Failed to update Payment status to VERIFIED for ${orderRef}:`, error.message);
   }
 
   // Edit admin message: replace "Confirm Payment" button with "Release Crypto"
@@ -346,8 +381,12 @@ async function handleReceiptSubmission(ctx) {
     return ctx.reply('❌ No pending payment claim found. Please use "I\'ve paid" button on an order.');
   }
 
-  // Get the photo file ID
-  const fileId = ctx.message.photo[ctx.message.photo.length - 1].file_id;
+  // Get the photo file ID and metadata
+  const photo = ctx.message.photo[ctx.message.photo.length - 1];
+  const fileId = photo.file_id;
+  const fileWidth = photo.width;
+  const fileHeight = photo.height;
+  const fileSize = photo.file_size;
 
   try {
     // Update order status to payment_claimed (this marks it as claimed with proof)
@@ -357,11 +396,62 @@ async function handleReceiptSubmission(ctx) {
       return ctx.reply('❌ Order has already been processed or has expired.');
     }
 
-    // Store the receipt file ID in Payment model
+    // Download the actual image from Telegram
+    let receiptBuffer = null;
+    let mimeType = 'image/jpeg';
+    let driveFileId = '';
+    let driveFileLink = '';
+
+    try {
+      // Get file info from Telegram (provides file path for download)
+      const fileLink = await ctx.telegram.getFileLink(fileId);
+      const response = await fetch(fileLink.href);
+      
+      if (response.ok) {
+        const arrayBuffer = await response.arrayBuffer();
+        receiptBuffer = Buffer.from(arrayBuffer);
+        mimeType = response.headers.get('content-type') || 'image/jpeg';
+
+        // Try to upload to Google Drive (non-blocking — failures are logged but don't block)
+        try {
+          const filename = `receipt_${orderRef}_${Date.now()}.jpg`;
+          const driveResult = await uploadReceiptToDrive(receiptBuffer, filename, mimeType);
+          driveFileId = driveResult.fileId;
+          driveFileLink = driveResult.fileLink;
+        } catch (driveError) {
+          console.error(`Drive upload failed for ${orderRef}:`, driveError.message);
+          // Continue without Drive upload — MongoDB will still have the image
+        }
+      }
+    } catch (downloadError) {
+      console.error(`Failed to download receipt image for ${orderRef}:`, downloadError.message);
+      // Continue without image bytes — fall back to saving just file_id
+    }
+
+    // Store the receipt data in Payment model
     const Payment = require('../../models/Payment');
     await Payment.findOneAndUpdate(
       { orderId: updated._id },
-      { receiptFileId: fileId },
+      {
+        $set: {
+          orderRef: updated.orderRef,
+          clientTelegramId: updated.clientTelegramId,
+          clientUsername: ctx.from.username || '',
+          receiptFileId: fileId,
+          receiptImage: receiptBuffer,
+          receiptMimeType: mimeType,
+          receiptFileSize: fileSize || 0,
+          receiptWidth: fileWidth || 0,
+          receiptHeight: fileHeight || 0,
+          uploadedBy: ctx.from.id,
+          uploadedByUsername: ctx.from.username || '',
+          uploadedAt: new Date(),
+          driveFileId: driveFileId,
+          driveFileLink: driveFileLink,
+          amount: updated.fiatAmount,
+          status: 'PENDING'
+        }
+      },
       { upsert: true }
     );
 
