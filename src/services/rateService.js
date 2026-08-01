@@ -45,8 +45,10 @@ async function initializeRates() {
   for (const coin of Object.values(COINS)) {
     const existing = await Rate.findOne({ coin });
     if (!existing) {
+      // Defaults stay internally consistent with the USDT anchor:
+      // ETH/NGN = USDT/NGN × ETH/USD (1630 × 3400 = 5,542,000)
       const defaults = {
-        ETH: { buyRate: 2500000, sellRate: 2400000, usdPrice: 3400 },
+        ETH: { buyRate: 5652840, sellRate: 5431160, usdPrice: 3400 },
         USDT: { buyRate: 1630, sellRate: 1590, usdPrice: 1 },
         USDC: { buyRate: 1630, sellRate: 1590, usdPrice: 1 }
       };

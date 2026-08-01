@@ -71,8 +71,13 @@ async function fetchLivePrices() {
     prices.USDT = { ngn: usdtngn, usd: 1 };
   }
 
-  if (ethngn && ethusdt) {
-    prices.ETH = { ngn: ethngn, usd: ethusdt };
+  if (ethusdt && usdtngn) {
+    // Derive ETH/NGN from the USDT anchor so the rate is always consistent
+    // with the naira-per-dollar rate (USD → USDT → NGN).
+    prices.ETH = { ngn: ethusdt * usdtngn, usd: ethusdt };
+  } else if (ethngn) {
+    // Fallback to Binance ETHNGN if USDTNGN is unavailable.
+    prices.ETH = { ngn: ethngn, usd: ethusdt || 3400 };
   }
 
   if (usdcusdt && usdtngn) {
