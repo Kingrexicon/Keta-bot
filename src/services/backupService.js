@@ -188,7 +188,8 @@ async function uploadReceiptToDrive(imageBuffer, filename, mimeType) {
     const response = await drive.files.create({
       resource: fileMetadata,
       media: media,
-      fields: 'id, webViewLink'
+      fields: 'id, webViewLink',
+      supportsAllDrives: true
     });
 
     console.log(`📤 Receipt uploaded to Drive: ${filename} (${response.data.id})`);

@@ -2,7 +2,7 @@ const Order = require('../../models/Order');
 const Admin = require('../../models/Admin');
 const User = require('../../models/User');
 const { setRate, getRate } = require('../../services/rateService');
-const { COINS, ORDER_STATUS } = require('../../utils/constants');
+const { COINS, ORDER_STATUS, MIN_RATE_BY_COIN } = require('../../utils/constants');
 const { isAdminUser } = require('./payment');
 const { checkNativeBalance, checkTokenBalance, checkSolanaNativeBalance, checkSolanaTokenBalance, getSolanaConnection, getSolanaWallet } = require('../../services/payoutService');
 const { ethers } = require('ethers');
@@ -58,6 +58,15 @@ async function setrateHandler(ctx) {
 
   if (!Number.isFinite(rate) || rate <= 0) {
     return ctx.reply('Invalid rate. Please enter a valid number.');
+  }
+
+  // Safety guard: reject rates that are implausibly low for the coin
+  // (e.g. an ETH rate of ₦1,430 instead of ₦2,900,000)
+  const minRate = MIN_RATE_BY_COIN[coin];
+  if (minRate && rate < minRate) {
+    return ctx.reply(
+      `❌ <b>Rate looks too low.</b>\n\n₦${rate.toLocaleString()} is below the minimum expected rate of ₦${minRate.toLocaleString()} for ${coin}.\n\nIf you meant to set a stablecoin price ~₦1,600, this looks like it belongs to <b>USDT</b> or <b>USDC</b>, not ${coin}. Please double-check and enter the correct ${coin} rate.`
+    , { parse_mode: 'HTML' });
   }
 
   const spread = 40;
@@ -154,6 +163,15 @@ async function handleRateInput(ctx) {
 
   if (!Number.isFinite(rate) || rate <= 0) {
     return ctx.reply('Enter a valid rate greater than 0.');
+  }
+
+  // Safety guard: reject implausibly low rates for the coin
+  const minRate = MIN_RATE_BY_COIN[coin];
+  if (minRate && rate < minRate) {
+    return ctx.reply(
+      `❌ <b>Rate looks too low.</b>\n\n₦${rate.toLocaleString()} is below the minimum expected rate of ₦${minRate.toLocaleString()} for ${coin}.\n\nIf you meant to set a stablecoin price ~₦1,600, this looks like it belongs to <b>USDT</b> or <b>USDC</b>, not ${coin}. Please double-check and enter the correct ${coin} rate.`,
+      { parse_mode: 'HTML' }
+    );
   }
 
   // Fetch the current rate from DB to preserve the unchanged side

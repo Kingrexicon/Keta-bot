@@ -6,7 +6,7 @@ const { CHAINS } = require('../../utils/constants');
 const { validateWalletAddress } = require('../../utils/validators');
 const { chainMenu, cancelMenu, confirmMenu, mainMenu } = require('../keyboards/mainMenu');
 const User = require('../../models/User');
-const { MIN_BUY_USD, LARGE_BUY_USD_THRESHOLD, DEEPIDV_URL } = require('../../utils/constants');
+const { MIN_BUY_USD, LARGE_BUY_USD_THRESHOLD, DEEPIDV_URL, MIN_FIAT_AMOUNT, MIN_EFFECTIVE_NGN_USD_RATE } = require('../../utils/constants');
 
 async function buyHandler(ctx) {
   ctx.session.orderFlow = { type: 'BUY' };
@@ -74,6 +74,32 @@ async function handleChainSelection(ctx) {
 
   if (!isFinite(fiatAmount) || fiatAmount <= 0) {
     return ctx.reply('Unable to calculate amount. Please try again or contact support.');
+  }
+
+  // Safety guard: if the computed fiat amount is absurdly low, the rate is
+  // almost certainly misconfigured (e.g. an ETH rate set to stablecoin scale).
+  // Block the order instead of letting a ₦8 order through.
+  if (fiatAmount < MIN_FIAT_AMOUNT) {
+    ctx.session.orderFlow = null;
+    ctx.session.step = null;
+    console.error(`[SAFETY] Order blocked: fiatAmount ₦${fiatAmount} below minimum ₦${MIN_FIAT_AMOUNT}. Coin: ${coin}, buyRate: ₦${rate.buyRate}, usdPrice: $${usdPrice}, usdAmount: $${usdAmount}`);
+    return ctx.reply(
+      `❌ <b>Unable to create order</b>\n\nThe calculated amount (₦${fiatAmount}) is abnormally low for your purchase. This usually means the ${coin} rate is temporarily misconfigured.\n\nPlease try again later or contact support.`,
+      { parse_mode: 'HTML', ...mainMenu() }
+    );
+  }
+
+  // Warn if the effective NGN-per-USD rate is abnormally low — a sign the
+  // quoted rate is likely wrong even though the order technically qualifies.
+  const effectiveNgnUsdRate = usdAmount > 0 ? fiatAmount / usdAmount : 0;
+  if (effectiveNgnUsdRate < MIN_EFFECTIVE_NGN_USD_RATE) {
+    ctx.session.orderFlow = null;
+    ctx.session.step = null;
+    console.error(`[SAFETY] Order blocked: effective NGN/USD rate ₦${effectiveNgnUsdRate.toFixed(2)} below minimum ₦${MIN_EFFECTIVE_NGN_USD_RATE}. Coin: ${coin}, buyRate: ₦${rate.buyRate}, usdPrice: $${usdPrice}, usdAmount: $${usdAmount}, fiatAmount: ₦${fiatAmount}`);
+    return ctx.reply(
+      `❌ <b>Unable to create order</b>\n\nThe computed amount (₦${fiatAmount}) does not match the expected value for your purchase. This usually means the ${coin} rate is temporarily misconfigured.\n\nPlease try again later or contact support.`,
+      { parse_mode: 'HTML', ...mainMenu() }
+    );
   }
 
   const cryptoAmount = Math.floor((fiatAmount / rate.buyRate) * 10000) / 10000;

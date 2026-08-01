@@ -403,30 +403,45 @@ async function handleReceiptSubmission(ctx) {
     let driveFileLink = '';
 
     try {
-      // Get file info from Telegram (provides file path for download)
+      console.log(`[RECEIPT] Step 1: Getting file link from Telegram for fileId: ${fileId}`);
       const fileLink = await ctx.telegram.getFileLink(fileId);
+      console.log(`[RECEIPT] Step 2: File link obtained: ${fileLink.href}`);
+
+      console.log(`[RECEIPT] Step 3: Downloading image from Telegram...`);
       const response = await fetch(fileLink.href);
+      console.log(`[RECEIPT] Step 4: Download response status: ${response.status} ${response.statusText}`);
+      console.log(`[RECEIPT] Step 4b: Content-Type header: ${response.headers.get('content-type')}`);
+      console.log(`[RECEIPT] Step 4c: Content-Length header: ${response.headers.get('content-length')}`);
       
       if (response.ok) {
         const arrayBuffer = await response.arrayBuffer();
         receiptBuffer = Buffer.from(arrayBuffer);
         mimeType = response.headers.get('content-type') || 'image/jpeg';
+        console.log(`[RECEIPT] Step 5: Image downloaded successfully. Size: ${receiptBuffer.length} bytes, MIME: ${mimeType}`);
 
         // Try to upload to Google Drive (non-blocking — failures are logged but don't block)
         try {
+          console.log(`[RECEIPT] Step 6: Uploading to Google Drive...`);
           const filename = `receipt_${orderRef}_${Date.now()}.jpg`;
           const driveResult = await uploadReceiptToDrive(receiptBuffer, filename, mimeType);
           driveFileId = driveResult.fileId;
           driveFileLink = driveResult.fileLink;
+          console.log(`[RECEIPT] Step 7: Drive upload result - fileId: "${driveFileId}", fileLink: "${driveFileLink}"`);
         } catch (driveError) {
-          console.error(`Drive upload failed for ${orderRef}:`, driveError.message);
+          console.error(`[RECEIPT] ❌ Drive upload failed for ${orderRef}:`, driveError.message);
+          console.error(`[RECEIPT] ❌ Drive upload stack:`, driveError.stack);
           // Continue without Drive upload — MongoDB will still have the image
         }
+      } else {
+        console.error(`[RECEIPT] ❌ Telegram download returned status ${response.status}: ${response.statusText}`);
       }
     } catch (downloadError) {
-      console.error(`Failed to download receipt image for ${orderRef}:`, downloadError.message);
+      console.error(`[RECEIPT] ❌ Failed to download receipt image for ${orderRef}:`, downloadError.message);
+      console.error(`[RECEIPT] ❌ Download error stack:`, downloadError.stack);
       // Continue without image bytes — fall back to saving just file_id
     }
+
+    console.log(`[RECEIPT] Step 8: Saving to MongoDB. Has image: ${!!receiptBuffer}, Drive fileId: "${driveFileId}"`);
 
     // Store the receipt data in Payment model
     const Payment = require('../../models/Payment');
@@ -454,6 +469,7 @@ async function handleReceiptSubmission(ctx) {
       },
       { upsert: true }
     );
+    console.log(`[RECEIPT] Step 9: MongoDB save complete for order ${updated.orderRef}`);
 
     // Clear the session
     delete ctx.session.awaitingReceiptOrderRef;
@@ -465,6 +481,19 @@ async function handleReceiptSubmission(ctx) {
     const adminGroupId = process.env.ADMIN_GROUP_ID;
     if (adminGroupId) {
       const order = updated;
+
+      // Build the admin message — include Drive backup status if available
+      let driveStatusLine = '';
+      if (driveFileId && driveFileLink) {
+        driveStatusLine = `\n☁️ <b>Drive Backup:</b> <a href="${driveFileLink}">View Receipt</a>`;
+      } else if (driveFileId && !driveFileLink) {
+        driveStatusLine = `\n☁️ <b>Drive Backup:</b> Saved (ID: ${driveFileId})`;
+      } else if (receiptBuffer && !driveFileId) {
+        driveStatusLine = `\n⚠️ <b>Drive Backup:</b> Failed — saved in MongoDB only`;
+      } else {
+        driveStatusLine = `\n⚠️ <b>Image:</b> Not saved (file_id stored only)`;
+      }
+
       const adminMessage = `
 🔔 <b>PAYMENT CLAIMED WITH RECEIPT</b>
 
@@ -474,7 +503,7 @@ async function handleReceiptSubmission(ctx) {
 <b>Amount:</b> ₦${order.fiatAmount.toLocaleString()}
 <b>Crypto:</b> ${order.cryptoAmount} ${order.chain.split('-')[0]}
 <b>Wallet:</b> <code>${order.walletAddress}</code>
-<b>Expected Reference:</b> <code>${order.orderRef}</code>
+<b>Expected Reference:</b> <code>${order.orderRef}</code>${driveStatusLine}
 
 ⬇️ Receipt photo attached below:
       `;
