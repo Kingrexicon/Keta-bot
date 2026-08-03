@@ -33,7 +33,7 @@ const ORDER_EXPIRY_MINUTES = 30;
 const FEE = 500;
 
 // USD buy limits
-const MIN_BUY_USD = 20;
+const MIN_BUY_USD = 1;
 const LARGE_BUY_USD_THRESHOLD = 100;
 
 // DeepIDV verification link (replace with actual DeepIDV URL)
