@@ -29,9 +29,11 @@ app.use(express.json({
 
 /**
  * Serve receipt images from MongoDB via browser.
- * Protected by RECEIPT_ACCESS_KEY env var — only authorized viewers can access.
- * GET /receipt/:orderRef?key=<RECEIPT_ACCESS_KEY>
+ * Secured by HMAC-SHA256 per-receipt tokens computed from RECEIPT_ACCESS_KEY + orderRef.
+ * The token is unforgeable without the secret key and only works for its specific orderRef.
+ * GET /receipt/:orderRef?token=<HMAC_TOKEN>
  */
+const crypto = require('crypto');
 app.get('/receipt/:orderRef', async (req, res) => {
   try {
     const accessKey = process.env.RECEIPT_ACCESS_KEY;
@@ -39,13 +41,20 @@ app.get('/receipt/:orderRef', async (req, res) => {
       return res.status(503).json({ error: 'RECEIPT_ACCESS_KEY not configured on server' });
     }
 
-    const { key } = req.query;
-    if (!key || key !== accessKey) {
-      return res.status(401).json({ error: 'Unauthorized. Invalid or missing access key.' });
+    const { orderRef } = req.params;
+    const { token } = req.query;
+
+    // Compute the expected token for this orderRef using the same HMAC logic
+    const expectedToken = crypto.createHmac('sha256', accessKey)
+      .update(orderRef)
+      .digest('hex')
+      .substring(0, 32);
+
+    if (!token || token !== expectedToken) {
+      return res.status(401).json({ error: 'Unauthorized. Invalid or missing token.' });
     }
 
     const Payment = require('./models/Payment');
-    const { orderRef } = req.params;
 
     const payment = await Payment.findOne({ orderRef }).lean();
     if (!payment || !payment.receiptImage) {

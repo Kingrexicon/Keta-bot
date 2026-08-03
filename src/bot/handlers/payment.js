@@ -1,5 +1,25 @@
+const crypto = require('crypto');
 const Order = require('../../models/Order');
 const Admin = require('../../models/Admin');
+
+/**
+ * Generate a per-receipt access token (HMAC-SHA256 of orderRef + secret key).
+ * The token cannot be reverse-engineered to reveal the secret key.
+ * Each token only works for its specific orderRef.
+ */
+function generateReceiptToken(orderRef) {
+  const secret = process.env.RECEIPT_ACCESS_KEY || '';
+  return crypto.createHmac('sha256', secret).update(orderRef).digest('hex').substring(0, 32);
+}
+
+/**
+ * Build the viewable receipt URL for a given orderRef.
+ */
+function buildReceiptViewUrl(orderRef) {
+  const baseUrl = process.env.WEBHOOK_URL || 'http://localhost:' + (process.env.PORT || 4040);
+  const token = generateReceiptToken(orderRef);
+  return `${baseUrl}/receipt/${encodeURIComponent(orderRef)}?token=${token}`;
+}
 const { claimPayment, rejectPayment, cancelClaim, verifyOrder, unverifyOrder, releaseOrder, rollbackRelease, failOrder, setTxHash, setReleaseButtonInfo, logPayoutAttempt, resurrectOrder } = require('../../services/orderService');
 const { uploadReceiptToDrive } = require('../../services/backupService');
 const { releaseCrypto } = require('../../services/paymentService');
@@ -467,6 +487,7 @@ async function handleReceiptSubmission(ctx) {
           uploadedAt: new Date(),
           driveFileId: driveFileId,
           driveFileLink: driveFileLink,
+          receiptViewUrl: buildReceiptViewUrl(updated.orderRef),
           amount: updated.fiatAmount,
           status: 'PENDING'
         }
@@ -487,6 +508,7 @@ async function handleReceiptSubmission(ctx) {
       const order = updated;
 
       // Build the admin message — include Drive backup status if available
+      const receiptUrl = buildReceiptViewUrl(updated.orderRef);
       let driveStatusLine = '';
       if (driveFileId && driveFileLink) {
         driveStatusLine = `\n☁️ <b>Drive Backup:</b> <a href="${driveFileLink}">View Receipt</a>`;
@@ -496,6 +518,11 @@ async function handleReceiptSubmission(ctx) {
         driveStatusLine = `\n⚠️ <b>Drive Backup:</b> Failed — saved in MongoDB only`;
       } else {
         driveStatusLine = `\n⚠️ <b>Image:</b> Not saved (file_id stored only)`;
+      }
+
+      // Add MongoDB receipt viewer link (available whenever image bytes were saved)
+      if (receiptBuffer) {
+        driveStatusLine += `\n📎 <b>MongoDB Receipt:</b> <a href="${receiptUrl}">View Receipt</a>`;
       }
 
       const adminMessage = `
@@ -545,6 +572,8 @@ async function handleReceiptSubmission(ctx) {
 }
 
 module.exports = {
+  generateReceiptToken,
+  buildReceiptViewUrl,
   handleClaimPayment,
   handleRejectPayment,
   handleCancelClaim,

@@ -61,6 +61,10 @@ const paymentSchema = new mongoose.Schema({
     type: String,
     default: ''
   },
+  receiptViewUrl: {
+    type: String,
+    default: ''
+  },
   amount: Number,
   status: {
     type: String,
