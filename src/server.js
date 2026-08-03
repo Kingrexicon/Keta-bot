@@ -27,6 +27,44 @@ app.use(express.json({
   }
 }));
 
+/**
+ * Serve receipt images from MongoDB via browser.
+ * Protected by RECEIPT_ACCESS_KEY env var — only authorized viewers can access.
+ * GET /receipt/:orderRef?key=<RECEIPT_ACCESS_KEY>
+ */
+app.get('/receipt/:orderRef', async (req, res) => {
+  try {
+    const accessKey = process.env.RECEIPT_ACCESS_KEY;
+    if (!accessKey) {
+      return res.status(503).json({ error: 'RECEIPT_ACCESS_KEY not configured on server' });
+    }
+
+    const { key } = req.query;
+    if (!key || key !== accessKey) {
+      return res.status(401).json({ error: 'Unauthorized. Invalid or missing access key.' });
+    }
+
+    const Payment = require('./models/Payment');
+    const { orderRef } = req.params;
+
+    const payment = await Payment.findOne({ orderRef }).lean();
+    if (!payment || !payment.receiptImage) {
+      return res.status(404).json({ error: 'Receipt not found for this order.' });
+    }
+
+    const mimeType = payment.receiptMimeType || 'image/jpeg';
+    const imageBuffer = payment.receiptImage.buffer || payment.receiptImage;
+
+    res.setHeader('Content-Type', mimeType);
+    res.setHeader('Content-Disposition', `inline; filename="receipt_${orderRef}.jpg"`);
+    res.setHeader('Cache-Control', 'no-store');
+    res.send(Buffer.from(imageBuffer));
+  } catch (error) {
+    console.error('Error serving receipt:', error.message);
+    res.status(500).json({ error: 'Failed to retrieve receipt.' });
+  }
+});
+
 // Health check — always responds, even before DB/bot are ready
 app.get('/', (req, res) => {
   res.json({
