@@ -416,7 +416,11 @@ async function handleReceiptSubmission(ctx) {
       if (response.ok) {
         const arrayBuffer = await response.arrayBuffer();
         receiptBuffer = Buffer.from(arrayBuffer);
-        mimeType = response.headers.get('content-type') || 'image/jpeg';
+        // Telegram photos are always JPEG. The download endpoint sometimes
+        // returns a generic "application/octet-stream" Content-Type header,
+        // so only trust it if it's actually an image/* type.
+        const headerType = response.headers.get('content-type') || '';
+        mimeType = headerType.startsWith('image/') ? headerType : 'image/jpeg';
         console.log(`[RECEIPT] Step 5: Image downloaded successfully. Size: ${receiptBuffer.length} bytes, MIME: ${mimeType}`);
 
         // Try to upload to Google Drive (non-blocking — failures are logged but don't block)
