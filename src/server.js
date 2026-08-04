@@ -29,6 +29,9 @@ app.use(express.json({
   }
 }));
 
+// Parse form-urlencoded bodies (BVN form submissions)
+app.use(express.urlencoded({ extended: true }));
+
 /**
  * Serve receipt images from MongoDB via browser.
  * Secured by HMAC-SHA256 per-receipt tokens computed from RECEIPT_ACCESS_KEY + orderRef.
