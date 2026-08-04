@@ -2,7 +2,7 @@ const { Telegraf, session } = require('telegraf');
 const sessionMiddleware = require('../bot/middleware/session');
 const startHandler = require('../bot/handlers/start');
 const { buyHandler, handleAmountEntry, handleChainSelection, handleWalletEntry, handleConfirm } = require('../bot/handlers/buy');
-const { handleSurname, handleFirstName, handleOtherNames, handlePhoneContact, handlePhoneManual } = require('../bot/handlers/onboarding');
+const { handleSurname, handleFirstName, handleOtherNames, handlePhoneContact, handlePhoneManual, handleBvnSkip } = require('../bot/handlers/onboarding');
 const { handleClaimPayment, handleRejectPayment, handleCancelClaim, handleConfirmPayment, handleReleaseCrypto, handleResurrectOrder, handleReceiptSubmission, handleBackToClaimed } = require('../bot/handlers/payment');
 const { verifyHandler } = require('../bot/handlers/verify');
 const { notifyAdminNewOrder } = require('../services/notificationService');
@@ -31,6 +31,9 @@ function createBot() {
     await ctx.answerCbQuery();
     return startHandler(ctx);
   });
+
+  // Onboarding: skip BVN verification
+  bot.action('bvn_skip', handleBvnSkip);
 
   // Main menu handlers
   bot.hears('🟢 Buy Crypto', buyHandler);

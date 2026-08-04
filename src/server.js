@@ -8,6 +8,8 @@ const cron = require('node-cron');
 const { connectDB, disconnectDB } = require('./config/database');
 const { initializeBot, getBot } = require('./config/bot');
 const webhookRoute = require('./routes/webhook');
+const bvnRoute = require('./routes/bvn');
+const anchorWebhookRoute = require('./routes/anchorWebhook');
 const { expireOrders } = require('./services/orderService');
 const { refreshRatesFromApi } = require('./services/rateService');
 const { runDailyJob } = require('./services/backupService');
@@ -109,6 +111,12 @@ app.get('/debug', (req, res) => {
   });
 });
 
+// Mount Anchor webhook + BVN routes BEFORE listen so they're always available,
+// independent of DB/bot initialization (Anchor must always be able to reach the webhook).
+app.use('/anchor', anchorWebhookRoute);
+app.use(bvnRoute);
+console.log('✅ Anchor webhook + BVN routes mounted');
+
 // Start the HTTP server FIRST so Render detects the port immediately
 const server = app.listen(PORT, HOST, () => {
   const addr = server.address();
@@ -131,7 +139,7 @@ const server = app.listen(PORT, HOST, () => {
     global.__botReady = true;
     console.log('✅ Telegram bot initialized');
 
-    // Only mount webhook route if we're using webhook mode (not polling)
+    // Only mount Telegram webhook route if we're using webhook mode (not polling)
     if (process.env.NODE_ENV === 'production' && process.env.WEBHOOK_URL && process.env.USE_POLLING !== 'true') {
       app.use(webhookRoute);
       console.log('✅ Webhook route mounted');

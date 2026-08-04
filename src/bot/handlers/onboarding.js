@@ -1,6 +1,8 @@
 const User = require('../../models/User');
 const { validateName, validatePhoneNumber } = require('../../utils/validators');
 const { phoneMenu, skipMenu, mainMenu } = require('../keyboards/mainMenu');
+const { createBvnToken } = require('../../utils/bvnToken');
+const { Markup } = require('telegraf');
 
 /**
  * Check whether a user has completed onboarding
@@ -17,7 +19,7 @@ function isOnboardingComplete(user) {
 
 /**
  * Start the onboarding flow
- * Order: surname -> first name -> other names (optional) -> phone
+ * Order: surname -> first name -> other names (optional) -> phone -> BVN (optional)
  */
 async function startOnboarding(ctx) {
   ctx.session.onboarding = {};
@@ -120,7 +122,7 @@ async function handlePhoneContact(ctx) {
     return;
   }
 
-  await completeOnboarding(ctx, {
+  await savePhoneAndProceed(ctx, {
     phoneNumber,
     phoneVerifiedViaTelegram: true
   });
@@ -151,21 +153,19 @@ async function handlePhoneManual(ctx) {
     );
   }
 
-  await completeOnboarding(ctx, {
+  await savePhoneAndProceed(ctx, {
     phoneNumber: text,
     phoneVerifiedViaTelegram: false
   });
 }
 
 /**
- * Save the user to the database and show the main menu.
- * Creates a new record if the user doesn't exist yet; otherwise updates.
+ * Save the user's phone (create or update the record) then move to the BVN step.
  */
-async function completeOnboarding(ctx, phoneData) {
+async function savePhoneAndProceed(ctx, phoneData) {
   const onboarding = ctx.session.onboarding || {};
   const { id, username } = ctx.from;
 
-  // Use the user-entered first name; fall back to Telegram's if somehow missing
   const firstName = onboarding.firstName || ctx.from.first_name || '';
   const surname = onboarding.surname || '';
   const otherNames = onboarding.otherNames || '';
@@ -191,6 +191,51 @@ async function completeOnboarding(ctx, phoneData) {
     });
   }
 
+  // Move to the BVN step
+  ctx.session.step = 'BVN_OPTION';
+  await showBvnOption(ctx, user);
+}
+
+/**
+ * Show the optional BVN verification prompt.
+ * The user can verify now (via a signed link) or skip for later.
+ */
+async function showBvnOption(ctx, user) {
+  const appBase = process.env.APP_BASE_URL || 'https://keta-bot-79vw.onrender.com';
+  const token = createBvnToken(user.telegramId);
+  const verifyUrl = `${appBase}/bvn-verify?token=${token}`;
+
+  const termsUrl = `${appBase}/terms`;
+
+  await ctx.reply(
+    '🔐 <b>Optional: Verify your BVN</b>\n\n' +
+    'BVN verification is a <b>one-time</b> thing we use for <b>security and fraud prevention</b>, and it is required to <b>receive payouts</b> from us.\n\n' +
+    'Your BVN is submitted directly to <b>Anchor</b> (a licensed financial institution) for verification against NIBSS. <b>We do not store your raw BVN.</b>\n\n' +
+    `Please read our <a href="${termsUrl}">Terms & Conditions</a> before proceeding.`,
+    {
+      parse_mode: 'HTML',
+      ...Markup.inlineKeyboard([
+        [Markup.button.url('🔐 Verify BVN', verifyUrl)],
+        [Markup.button.callback('⏭️ Skip for now', 'bvn_skip')]
+      ])
+    }
+  );
+}
+
+/**
+ * Handle the "Skip for now" callback for BVN.
+ */
+async function handleBvnSkip(ctx) {
+  await ctx.answerCbQuery('Skipped BVN verification. You can verify later.');
+  ctx.session.step = null;
+  await completeOnboarding(ctx);
+}
+
+/**
+ * Save the user to the database and show the main menu.
+ * Called after onboarding (including optional BVN step) is complete.
+ */
+async function completeOnboarding(ctx) {
   ctx.session.onboarding = null;
   ctx.session.step = null;
 
@@ -216,6 +261,7 @@ module.exports = {
   handleOtherNames,
   handlePhoneContact,
   handlePhoneManual,
+  handleBvnSkip,
   cancelOnboarding,
   isOnboardingComplete
 };

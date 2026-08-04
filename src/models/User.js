@@ -16,6 +16,17 @@ const userSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
+  email: String,
+  // BVN verification (via Anchor)
+  bvnVerified: {
+    type: Boolean,
+    default: false
+  },
+  bvnMasked: String,
+  bvnVerifiedAt: Date,
+  bvnReference: String,
+  bvnConsentAt: Date,
+  anchorCustomerId: String,
   kycStatus: {
     type: String,
     enum: ['PENDING', 'VERIFIED', 'REJECTED'],
