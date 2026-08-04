@@ -27,6 +27,20 @@ const confirmMenu = () =>
     .resize()
     .oneTime();
 
+const phoneMenu = () =>
+  Markup.keyboard([
+    [Markup.button.contactRequest('📱 Share Phone Number')],
+    ['✏️ Enter Manually'],
+    ['Cancel']
+  ])
+    .resize()
+    .oneTime();
+
+const skipMenu = () =>
+  Markup.keyboard([['⏭️ Skip']])
+    .resize()
+    .oneTime();
+
 const adminMenu = () =>
   Markup.keyboard([
     ['pending', 'stats', 'balances'],
@@ -47,6 +61,8 @@ module.exports = {
   chainMenu,
   cancelMenu,
   confirmMenu,
+  phoneMenu,
+  skipMenu,
   adminMenu,
   combinedAdminMenu
 };

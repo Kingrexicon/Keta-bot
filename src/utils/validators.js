@@ -54,9 +54,36 @@ function validateWalletAddress(address, chain) {
   }
 }
 
+/**
+ * Validate a person's name (surname, first name, or other names).
+ * Allows letters (including accented), spaces, hyphens, apostrophes, and periods.
+ * Length: 2-100 characters.
+ */
+function validateName(name) {
+  if (typeof name !== 'string') return false;
+  const trimmed = name.trim();
+  if (trimmed.length < 2 || trimmed.length > 100) return false;
+  return /^[\p{L}][\p{L}\s.'’-]*$/u.test(trimmed);
+}
+
+/**
+ * Validate a phone number in common formats:
+ *   +2348012345678
+ *   2348012345678
+ *   08012345678
+ * Generic international: 8-15 digits, optional leading +
+ */
+function validatePhoneNumber(phone) {
+  if (typeof phone !== 'string') return false;
+  const trimmed = phone.trim();
+  return /^\+?\d{8,15}$/.test(trimmed);
+}
+
 module.exports = {
   generateOrderRef,
   validateWalletAddress,
   validateEVMAddress,
-  validateSolanaAddress
+  validateSolanaAddress,
+  validateName,
+  validatePhoneNumber
 };

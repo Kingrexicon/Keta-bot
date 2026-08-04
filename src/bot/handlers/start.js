@@ -2,6 +2,7 @@ const User = require('../../models/User');
 const Admin = require('../../models/Admin');
 const { mainMenu, combinedAdminMenu } = require('../keyboards/mainMenu');
 const { Markup } = require('telegraf');
+const { startOnboarding, isOnboardingComplete } = require('./onboarding');
 
 async function isAdminUser(telegramId) {
   const admin = await Admin.findOne({ telegramId, active: true });
@@ -18,12 +19,9 @@ async function startHandler(ctx) {
 
   let user = await User.findOne({ telegramId: id });
 
-  if (!user) {
-    user = await User.create({
-      telegramId: id,
-      username,
-      firstName: first_name
-    });
+  // Collect full name & phone number from users not fully onboarded
+  if (!user || !isOnboardingComplete(user)) {
+    return startOnboarding(ctx);
   }
 
   // Check if user is in the admin group

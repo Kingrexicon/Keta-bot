@@ -2,6 +2,7 @@ const { Telegraf, session } = require('telegraf');
 const sessionMiddleware = require('../bot/middleware/session');
 const startHandler = require('../bot/handlers/start');
 const { buyHandler, handleAmountEntry, handleChainSelection, handleWalletEntry, handleConfirm } = require('../bot/handlers/buy');
+const { handleSurname, handleFirstName, handleOtherNames, handlePhoneContact, handlePhoneManual } = require('../bot/handlers/onboarding');
 const { handleClaimPayment, handleRejectPayment, handleCancelClaim, handleConfirmPayment, handleReleaseCrypto, handleResurrectOrder, handleReceiptSubmission, handleBackToClaimed } = require('../bot/handlers/payment');
 const { verifyHandler } = require('../bot/handlers/verify');
 const { notifyAdminNewOrder } = require('../services/notificationService');
@@ -24,6 +25,7 @@ function createBot() {
   bot.use(sessionMiddleware);
 
   bot.start(startHandler);
+  bot.on('contact', handlePhoneContact);
   bot.hears('Reset', startHandler);
   bot.action('restart_bot', async (ctx) => {
     await ctx.answerCbQuery();
@@ -176,10 +178,21 @@ function createBot() {
     if (!s.step) return;
 
     // Don't re-process messages already handled by bot.hears() menu handlers
+    // Main menu labels handled by bot.hears() — do NOT add flow-control buttons
+    // (e.g. 'Cancel', '✏️ Enter Manually', '⏭️ Skip') here; they are handled by
+    // the state machine switch below.
     const menuButtons = ['🟢 Buy Crypto', '🔴 Sell Crypto', '📈 Rates', '📜 My Orders', '🔍 Verify Identity', 'pending', 'stats', 'balances', 'setrate', 'help', 'Reset'];
     if (menuButtons.includes(ctx.message.text)) return;
 
     switch (s.step) {
+      case 'ENTER_SURNAME':
+        return handleSurname(ctx);
+      case 'ENTER_FIRST_NAME':
+        return handleFirstName(ctx);
+      case 'ENTER_OTHER_NAMES':
+        return handleOtherNames(ctx);
+      case 'ENTER_PHONE':
+        return handlePhoneManual(ctx);
       case 'ENTER_AMOUNT':
         return handleAmountEntry(ctx);
       case 'SELECT_CHAIN':

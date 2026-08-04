@@ -9,7 +9,13 @@ const userSchema = new mongoose.Schema({
   },
   username: String,
   firstName: String,
+  surname: String,
+  otherNames: String,
   phoneNumber: String,
+  phoneVerifiedViaTelegram: {
+    type: Boolean,
+    default: false
+  },
   kycStatus: {
     type: String,
     enum: ['PENDING', 'VERIFIED', 'REJECTED'],
