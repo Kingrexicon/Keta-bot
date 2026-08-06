@@ -179,7 +179,9 @@ router.post('/bvn-verify/submit', async (req, res) => {
     // Step 2: Submit BVN KYC
     await submitKyc({ customerId, bvn, dateOfBirth, gender });
 
-    // Step 3: Record consent timestamp (NDPR audit trail)
+    // Step 3: Save email + gender to the user record, and record consent timestamp
+    user.email = email;
+    user.gender = gender;
     user.bvnConsentAt = new Date();
     await user.save();
 
@@ -256,6 +258,87 @@ router.post('/bvn-verify/submit', async (req, res) => {
     `);
   } catch (error) {
     console.error('BVN submit error:', error.message);
+
+    // Handle "Kyc already completed" — the customer is already verified on Anchor.
+    // Treat this as a success: update the DB, notify the user, and show a success page.
+    if (error.message.includes('412') || error.message.toLowerCase().includes('kyc already completed')) {
+      try {
+        // Save email + gender even on this path
+        user.email = email;
+        user.gender = gender;
+        user.bvnConsentAt = new Date();
+        await user.save();
+
+        // Query Anchor for the customer's status
+        let approved = false;
+        if (user.anchorCustomerId) {
+          try {
+            const customer = await getCustomer(user.anchorCustomerId);
+            const status = customer?.data?.attributes?.status || customer?.data?.attributes?.kycStatus || '';
+            approved = ['approved', 'verified', 'ACTIVE'].includes(status);
+          } catch (e) {
+            console.error('Error checking customer status on 412:', e.message);
+          }
+        }
+
+        if (approved || user.bvnVerified) {
+          // Mark as verified in DB
+          if (!user.bvnVerified) {
+            user.bvnVerified = true;
+            user.bvnVerifiedAt = new Date();
+            user.kycStatus = 'VERIFIED';
+            user.kycVerifiedAt = new Date();
+            await user.save();
+            console.log(`✅ [412] BVN verified for telegramId ${user.telegramId}`);
+
+            // Notify the user in Telegram
+            try {
+              const bot = getBot();
+              if (bot && bot.telegram) {
+                await bot.telegram.sendMessage(
+                  user.telegramId,
+                  '✅ <b>BVN Verified Successfully!</b>\n\nYour BVN has been verified for security and fraud prevention. You can now receive payouts.',
+                  { parse_mode: 'HTML' }
+                );
+              }
+            } catch (e) {
+              console.error('Failed to notify user of BVN approval (412):', e.message);
+            }
+          }
+
+          return res.send(`
+            <!DOCTYPE html>
+            <html lang="en">
+            <head>
+              <meta charset="UTF-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1.0">
+              <title>BVN Verification — KetaBot</title>
+              <style>
+                * { box-sizing: border-box; }
+                body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f4f6f8; margin: 0; padding: 20px; }
+                .card { max-width: 480px; margin: 40px auto; background: #fff; border-radius: 12px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); text-align: center; }
+                h1 { font-size: 22px; margin: 0 0 8px; color: #1a1a2e; }
+                p { color: #555; line-height: 1.5; margin: 8px 0; }
+                .btn { display: inline-block; padding: 12px 24px; background: #018ef5; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; margin-top: 16px; }
+                .btn:hover { background: #0179d1; }
+              </style>
+            </head>
+            <body>
+              <div class="card">
+                <h1>✅ Already Verified</h1>
+                <p>Your BVN has already been verified successfully.</p>
+                <p>You can now receive payouts.</p>
+                <a class="btn" href="https://t.me/KetaBot" target="_blank">Return to Telegram</a>
+              </div>
+            </body>
+            </html>
+          `);
+        }
+      } catch (e) {
+        console.error('Error handling 412 path:', e.message);
+      }
+    }
+
     res.redirect('/bvn-verify?token=' + encodeURIComponent(token) +
       '&error=' + encodeURIComponent('Verification submission failed: ' + error.message));
   }

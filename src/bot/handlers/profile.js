@@ -18,6 +18,7 @@ async function profileHandler(ctx) {
 
   const fullName = [user.surname, user.firstName, user.otherNames].filter(Boolean).join(' ');
   const phone = user.phoneNumber || 'Not set';
+  const email = user.email || 'Not set';
   const kycStatus = user.kycStatus || 'PENDING';
   const bvnVerified = !!user.bvnVerified;
 
@@ -25,6 +26,7 @@ async function profileHandler(ctx) {
     '👤 <b>My Profile</b>\n\n' +
     `📛 <b>Name:</b> ${fullName}\n` +
     `📱 <b>Phone:</b> <code>${phone}</code>\n` +
+    `📧 <b>Email:</b> <code>${email}</code>\n` +
     `🆔 <b>Telegram ID:</b> <code>${telegramId}</code>\n` +
     `🔐 <b>BVN Status:</b> ${bvnVerified ? '✅ Verified' : '❌ Not verified'}\n` +
     `🛡️ <b>KYC Status:</b> ${kycStatus === 'VERIFIED' ? '✅ Verified' : '❌ ' + kycStatus}\n\n` +
@@ -35,6 +37,7 @@ async function profileHandler(ctx) {
     ...Markup.inlineKeyboard([
       [Markup.button.callback('📛 Edit Name', 'edit_name')],
       [Markup.button.callback('📱 Edit Phone Number', 'edit_phone')],
+      [Markup.button.callback('📧 Edit Email', 'edit_email')],
       [Markup.button.callback('🔐 Verify BVN', 'edit_bvn')],
       [Markup.button.callback('❌ Close', 'edit_close')]
     ])
@@ -279,6 +282,56 @@ async function saveEditedPhone(ctx, phoneNumber, verifiedViaTelegram) {
 }
 
 /**
+ * Start editing the user's email address.
+ */
+async function startEditEmail(ctx) {
+  await ctx.answerCbQuery();
+  ctx.session.editProfile = { field: 'email' };
+  ctx.session.step = 'EDIT_EMAIL';
+  await ctx.reply(
+    '📧 <b>Edit Email</b>\n\nPlease enter your new <b>email address</b> (e.g. <code>you@example.com</code>):',
+    { parse_mode: 'HTML' }
+  );
+}
+
+/**
+ * Handle email entry during edit-email flow.
+ */
+async function handleEditEmail(ctx) {
+  const text = ctx.message.text.trim();
+
+  if (text === 'Cancel') {
+    ctx.session.editProfile = null;
+    ctx.session.step = null;
+    return ctx.reply('Edit cancelled.', { parse_mode: 'HTML', ...mainMenu() });
+  }
+
+  // Simple email validation
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(text)) {
+    return ctx.reply(
+      '❌ Invalid email address. Please enter a valid email (e.g. <code>you@example.com</code>):',
+      { parse_mode: 'HTML' }
+    );
+  }
+
+  const telegramId = ctx.from.id;
+  const user = await User.findOne({ telegramId });
+
+  if (user) {
+    user.email = text;
+    await user.save();
+  }
+
+  ctx.session.editProfile = null;
+  ctx.session.step = null;
+
+  await ctx.reply(
+    `✅ <b>Email updated!</b>\n\nYour new email address is <code>${text}</code>.`,
+    { parse_mode: 'HTML', ...mainMenu() }
+  );
+}
+
+/**
  * Close the profile menu.
  */
 async function closeProfile(ctx) {
@@ -291,11 +344,13 @@ module.exports = {
   profileHandler,
   startEditName,
   startEditPhone,
+  startEditEmail,
   startBvnVerification,
   handleEditSurname,
   handleEditFirstName,
   handleEditOtherNames,
   handleEditPhoneContact,
   handleEditPhoneManual,
+  handleEditEmail,
   closeProfile
 };

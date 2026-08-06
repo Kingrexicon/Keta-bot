@@ -3,7 +3,7 @@ const sessionMiddleware = require('../bot/middleware/session');
 const startHandler = require('../bot/handlers/start');
 const { buyHandler, handleAmountEntry, handleChainSelection, handleWalletEntry, handleConfirm } = require('../bot/handlers/buy');
 const { handleSurname, handleFirstName, handleOtherNames, handlePhoneContact, handlePhoneManual, handleBvnSkip } = require('../bot/handlers/onboarding');
-const { profileHandler, startEditName, startEditPhone, startBvnVerification, handleEditSurname, handleEditFirstName, handleEditOtherNames, handleEditPhoneContact, handleEditPhoneManual, closeProfile } = require('../bot/handlers/profile');
+const { profileHandler, startEditName, startEditPhone, startEditEmail, startBvnVerification, handleEditSurname, handleEditFirstName, handleEditOtherNames, handleEditPhoneContact, handleEditPhoneManual, handleEditEmail, closeProfile } = require('../bot/handlers/profile');
 const { handleClaimPayment, handleRejectPayment, handleCancelClaim, handleConfirmPayment, handleReleaseCrypto, handleResurrectOrder, handleReceiptSubmission, handleBackToClaimed } = require('../bot/handlers/payment');
 const { verifyHandler } = require('../bot/handlers/verify');
 const { notifyAdminNewOrder } = require('../services/notificationService');
@@ -46,6 +46,7 @@ function createBot() {
   bot.hears('✏️ My Profile', profileHandler);
   bot.action('edit_name', startEditName);
   bot.action('edit_phone', startEditPhone);
+  bot.action('edit_email', startEditEmail);
   bot.action('edit_bvn', startBvnVerification);
   bot.action('edit_close', closeProfile);
 
@@ -218,6 +219,8 @@ function createBot() {
         return handleEditOtherNames(ctx);
       case 'EDIT_PHONE':
         return handleEditPhoneManual(ctx);
+      case 'EDIT_EMAIL':
+        return handleEditEmail(ctx);
       case 'ENTER_AMOUNT':
         return handleAmountEntry(ctx);
       case 'SELECT_CHAIN':

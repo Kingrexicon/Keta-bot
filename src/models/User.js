@@ -17,12 +17,12 @@ const userSchema = new mongoose.Schema({
     default: false
   },
   email: String,
-  // BVN verification (via Anchor)
-  bvnVerified: {
-    type: Boolean,
-    default: false
+  gender: {
+    type: String,
+    enum: ['Male', 'Female'],
+    default: null
   },
-  bvnMasked: String,
+  // BVN verification (via Anchor)
   bvnVerifiedAt: Date,
   bvnReference: String,
   bvnConsentAt: Date,
