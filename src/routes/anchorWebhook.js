@@ -33,17 +33,26 @@ router.post('/bvn-webhook', async (req, res) => {
   // Acknowledge receipt immediately (Anchor may retry on non-2xx)
   res.status(200).json({ received: true });
 
+  // Log the full payload for debugging (truncated to avoid huge logs)
   console.log('Anchor webhook received:', eventType);
+  console.log('Full webhook payload:', JSON.stringify(payload).substring(0, 2000));
 
   if (!eventType) {
+    console.error('No event type in webhook payload');
     return;
   }
 
-  // Extract the customer ID from the payload relationships
-  const customerId = payload?.relationships?.customer?.data?.id || payload?.data?.relationships?.customer?.data?.id || '';
+  // Extract the customer ID from the payload relationships (try multiple locations)
+  const customerId =
+    payload?.relationships?.customer?.data?.id ||
+    payload?.data?.relationships?.customer?.data?.id ||
+    payload?.data?.id ||
+    payload?.customerId ||
+    payload?.customer_id ||
+    '';
 
   if (!customerId) {
-    console.error('No customer ID in webhook payload');
+    console.error('No customer ID in webhook payload. Full payload:', JSON.stringify(payload).substring(0, 2000));
     return;
   }
 

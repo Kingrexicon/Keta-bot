@@ -110,8 +110,29 @@ async function submitKyc({ customerId, bvn, dateOfBirth, gender }) {
   return anchorRequest('POST', `/api/v1/customers/${customerId}/verification/individual`, data);
 }
 
+/**
+ * Get the current verification status for a customer.
+ * Used as a fallback when webhooks are unreliable.
+ * @param {string} customerId - Anchor customer ID
+ * @returns {Promise<Object>} Customer data with verification status
+ */
+async function getCustomer(customerId) {
+  return anchorRequest('GET', `/api/v1/customers/${customerId}`);
+}
+
+/**
+ * Get the list of verifications for a customer.
+ * @param {string} customerId - Anchor customer ID
+ * @returns {Promise<Object>} Verifications list
+ */
+async function getVerifications(customerId) {
+  return anchorRequest('GET', `/api/v1/customers/${customerId}/verifications`);
+}
+
 module.exports = {
   createCustomer,
   submitKyc,
+  getCustomer,
+  getVerifications,
   ANCHOR_BASE_URL
 };

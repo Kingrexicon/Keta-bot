@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const User = require('../models/User');
 const { verifyBvnToken } = require('../utils/bvnToken');
-const { createCustomer, submitKyc } = require('../services/anchorService');
+const { createCustomer, submitKyc, getCustomer, getVerifications } = require('../services/anchorService');
 const { getBot } = require('../config/bot');
 
 /**
@@ -183,13 +183,76 @@ router.post('/bvn-verify/submit', async (req, res) => {
     user.bvnConsentAt = new Date();
     await user.save();
 
+    // Start a background poll as a fallback in case the webhook doesn't arrive.
+    // This queries Anchor's API for the verification status and updates the user
+    // + notifies them in Telegram when it completes.
+    startVerificationPoll(user.telegramId, customerId);
+
     res.send(`
-      <html><body style="font-family: sans-serif; text-align: center; padding: 40px;">
-        <h2>✅ Verification in progress</h2>
-        <p>Your BVN verification has been submitted to Anchor.</p>
-        <p>You will be notified in the bot once it completes (usually within a few minutes).</p>
-        <p><a href="/terms">Terms & Conditions</a></p>
-      </body></html>
+      <!DOCTYPE html>
+      <html lang="en">
+      <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>BVN Verification — KetaBot</title>
+        <style>
+          * { box-sizing: border-box; }
+          body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: #f4f6f8; margin: 0; padding: 20px; }
+          .card { max-width: 480px; margin: 40px auto; background: #fff; border-radius: 12px; padding: 32px; box-shadow: 0 2px 12px rgba(0,0,0,0.08); text-align: center; }
+          h1 { font-size: 22px; margin: 0 0 8px; color: #1a1a2e; }
+          p { color: #555; line-height: 1.5; margin: 8px 0; }
+          .spinner { display: inline-block; width: 40px; height: 40px; border: 4px solid #e0e0e0; border-top-color: #018ef5; border-radius: 50%; animation: spin 1s linear infinite; margin: 20px auto; }
+          @keyframes spin { to { transform: rotate(360deg); } }
+          .status { font-size: 15px; font-weight: 600; color: #333; margin: 12px 0; }
+          .btn { display: inline-block; padding: 12px 24px; background: #018ef5; color: #fff; text-decoration: none; border-radius: 8px; font-weight: 600; margin-top: 16px; }
+          .btn:hover { background: #0179d1; }
+          .hidden { display: none; }
+        </style>
+      </head>
+      <body>
+        <div class="card">
+          <h1>🔐 BVN Verification</h1>
+          <div id="loading">
+            <div class="spinner"></div>
+            <p class="status">Verification in progress...</p>
+            <p>Your BVN has been submitted to Anchor for verification.<br>This usually takes a few minutes.</p>
+          </div>
+          <div id="success" class="hidden">
+            <h1>✅ Verified!</h1>
+            <p>Your BVN has been successfully verified.</p>
+            <a class="btn" href="https://t.me/KetaBot" target="_blank">Return to Telegram</a>
+          </div>
+          <div id="error" class="hidden">
+            <h1>❌ Verification Failed</h1>
+            <p id="errorMsg">There was an issue verifying your BVN.</p>
+            <a class="btn" href="https://t.me/KetaBot" target="_blank">Return to Telegram</a>
+          </div>
+          <p style="margin-top: 20px; font-size: 12px; color: #888;"><a href="/terms">Terms & Conditions</a></p>
+        </div>
+        <script>
+          const token = ${JSON.stringify(token)};
+          async function checkStatus() {
+            try {
+              const res = await fetch('/bvn-status?token=' + encodeURIComponent(token));
+              const data = await res.json();
+              if (data.status === 'VERIFIED') {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('success').classList.remove('hidden');
+              } else if (data.status === 'REJECTED' || data.status === 'ERROR') {
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('errorMsg').textContent = data.message || 'There was an issue verifying your BVN.';
+                document.getElementById('error').classList.remove('hidden');
+              } else {
+                setTimeout(checkStatus, 5000);
+              }
+            } catch (e) {
+              setTimeout(checkStatus, 10000);
+            }
+          }
+          checkStatus();
+        </script>
+      </body>
+      </html>
     `);
   } catch (error) {
     console.error('BVN submit error:', error.message);
@@ -197,6 +260,101 @@ router.post('/bvn-verify/submit', async (req, res) => {
       '&error=' + encodeURIComponent('Verification submission failed: ' + error.message));
   }
 });
+
+/**
+ * GET /bvn-status — polled by the success page to check verification status.
+ * Returns the current BVN verification status for the user.
+ */
+router.get('/bvn-status', async (req, res) => {
+  const { token } = req.query;
+  const decoded = token ? verifyBvnToken(token) : null;
+
+  if (!decoded) {
+    return res.status(400).json({ status: 'ERROR', message: 'Invalid or expired token' });
+  }
+
+  const user = await User.findOne({ telegramId: decoded.telegramId });
+  if (!user) {
+    return res.status(404).json({ status: 'ERROR', message: 'User not found' });
+  }
+
+  if (user.bvnVerified) {
+    return res.json({ status: 'VERIFIED' });
+  }
+
+  if (user.kycStatus === 'REJECTED') {
+    return res.json({ status: 'REJECTED', message: 'Your BVN could not be verified. Please check your details and try again.' });
+  }
+
+  return res.json({ status: 'PENDING' });
+});
+
+/**
+ * Background poll: query Anchor for the customer's verification status.
+ * Runs every 30 seconds, up to 10 attempts (5 minutes), then gives up.
+ * This is a fallback for when the webhook doesn't arrive.
+ */
+async function startVerificationPoll(telegramId, customerId) {
+  let attempts = 0;
+  const maxAttempts = 10;
+
+  const poll = async () => {
+    attempts++;
+    try {
+      // Try to get the customer's verification status from Anchor
+      const customer = await getCustomer(customerId);
+      const status = customer?.data?.attributes?.status || customer?.data?.attributes?.kycStatus || '';
+
+      if (status === 'approved' || status === 'verified' || status === 'ACTIVE') {
+        // Verification approved — update the user
+        const user = await User.findOne({ telegramId });
+        if (user && !user.bvnVerified) {
+          user.bvnVerified = true;
+          user.bvnVerifiedAt = new Date();
+          user.kycStatus = 'VERIFIED';
+          user.kycVerifiedAt = new Date();
+          await user.save();
+          console.log(`✅ [POLL] BVN verified for telegramId ${telegramId}`);
+
+          // Notify the user in Telegram
+          try {
+            const bot = getBot();
+            if (bot && bot.telegram) {
+              await bot.telegram.sendMessage(
+                telegramId,
+                '✅ <b>BVN Verified Successfully!</b>\n\nYour BVN has been verified for security and fraud prevention. You can now receive payouts.',
+                { parse_mode: 'HTML' }
+              );
+            }
+          } catch (e) {
+            console.error('Failed to notify user of BVN approval (poll):', e.message);
+          }
+        }
+        return; // Done
+      }
+
+      if (status === 'rejected' || status === 'failed') {
+        const user = await User.findOne({ telegramId });
+        if (user) {
+          user.kycStatus = 'REJECTED';
+          await user.save();
+        }
+        return; // Done
+      }
+    } catch (e) {
+      console.error(`[POLL] Error checking verification status (attempt ${attempts}):`, e.message);
+    }
+
+    if (attempts < maxAttempts) {
+      setTimeout(poll, 30000);
+    } else {
+      console.log(`[POLL] Gave up polling for telegramId ${telegramId} after ${maxAttempts} attempts`);
+    }
+  };
+
+  // Start polling after a short delay
+  setTimeout(poll, 15000);
+}
 
 /**
  * GET /terms — hosted Terms & Conditions page.
