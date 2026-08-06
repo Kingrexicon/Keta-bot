@@ -20,26 +20,31 @@ async function profileHandler(ctx) {
   const phone = user.phoneNumber || 'Not set';
   const email = user.email || 'Not set';
   const kycStatus = user.kycStatus || 'PENDING';
-  // A user is considered BVN-verified if either flag is set (defense against inconsistent state)
-  const bvnVerified = !!user.bvnVerified || kycStatus === 'VERIFIED';
+  // BVN (Anchor) and KYC (DeepIDV) are separate — display independently.
+  const bvnVerified = !!user.bvnVerified;
+  const identityLocked = bvnVerified || kycStatus === 'VERIFIED';
 
-  const message =
+  let message =
     '👤 <b>My Profile</b>\n\n' +
     `📛 <b>Name:</b> ${fullName}\n` +
     `📱 <b>Phone:</b> <code>${phone}</code>\n` +
     `📧 <b>Email:</b> <code>${email}</code>\n` +
     `🆔 <b>Telegram ID:</b> <code>${telegramId}</code>\n` +
-    `🔐 <b>BVN Status:</b> ${bvnVerified ? '✅ Verified' : '❌ Not verified'}\n` +
-    `🛡️ <b>KYC Status:</b> ${kycStatus === 'VERIFIED' ? '✅ Verified' : '❌ ' + kycStatus}\n\n`;
+    `🔐 <b>BVN:</b> ${bvnVerified ? '✅ Verified' : '❌ Not verified'}\n` +
+    `📊 <b>KYC:</b> ${kycStatus === 'VERIFIED' ? '✅ Approved' : '❌ Pending (1/2)'}\n\n`;
 
   // Build the keyboard.
   const keyboard = [];
 
-  if (bvnVerified) {
+  if (identityLocked) {
     // Identity is locked after verification — no edits allowed.
     message += '🔒 <b>Your identity details are locked after verification.</b>\n' +
       'To change your name, phone, or email, please contact support.\n\n';
-    keyboard.push([Markup.button.callback('✅ BVN Verified', 'bvn_already_verified')]);
+    if (bvnVerified) {
+      keyboard.push([Markup.button.callback('✅ BVN Verified', 'bvn_already_verified')]);
+    } else {
+      keyboard.push([Markup.button.callback('🔐 Verify BVN', 'edit_bvn')]);
+    }
   } else {
     message += 'What would you like to update?\n';
     keyboard.push([Markup.button.callback('📛 Edit Name', 'edit_name')]);
@@ -83,7 +88,9 @@ async function startEditPhone(ctx) {
 }
 
 /**
- * Check whether a user is BVN-verified (either flag set).
+ * Check whether a user's identity is locked (BVN verified OR KYC approved).
+ * Used to guard profile edits — once identity is verified via either path,
+ * details cannot be changed without contacting support.
  */
 function isBvnVerified(user) {
   return !!user.bvnVerified || (user.kycStatus === 'VERIFIED');
@@ -209,12 +216,11 @@ async function handleEditOtherNames(ctx) {
     user.surname = edit.surname;
     user.firstName = edit.firstName;
     user.otherNames = edit.otherNames || '';
-    // Name changed — reset BVN/KYC so the user re-verifies with correct details
+    // Name changed — reset BVN so the user re-verifies with correct details
     user.bvnVerified = false;
     user.bvnMasked = undefined;
     user.bvnVerifiedAt = undefined;
     user.bvnReference = undefined;
-    user.kycStatus = 'PENDING';
     await user.save();
   }
 
@@ -309,12 +315,11 @@ async function saveEditedPhone(ctx, phoneNumber, verifiedViaTelegram) {
   if (user) {
     user.phoneNumber = phoneNumber;
     user.phoneVerifiedViaTelegram = verifiedViaTelegram;
-    // Phone changed — reset BVN/KYC so the user re-verifies with correct details
+    // Phone changed — reset BVN so the user re-verifies with correct details
     user.bvnVerified = false;
     user.bvnMasked = undefined;
     user.bvnVerifiedAt = undefined;
     user.bvnReference = undefined;
-    user.kycStatus = 'PENDING';
     await user.save();
   }
 

@@ -282,12 +282,10 @@ router.post('/bvn-verify/submit', async (req, res) => {
         }
 
         if (approved || user.bvnVerified) {
-          // Mark as verified in DB
+          // Mark as BVN-verified in DB (does NOT affect KYC status — KYC is separate)
           if (!user.bvnVerified) {
             user.bvnVerified = true;
             user.bvnVerifiedAt = new Date();
-            user.kycStatus = 'VERIFIED';
-            user.kycVerifiedAt = new Date();
             await user.save();
             console.log(`✅ [412] BVN verified for telegramId ${user.telegramId}`);
 
@@ -389,13 +387,11 @@ async function startVerificationPoll(telegramId, customerId) {
       const status = customer?.data?.attributes?.status || customer?.data?.attributes?.kycStatus || '';
 
       if (status === 'approved' || status === 'verified' || status === 'ACTIVE') {
-        // Verification approved — update the user
+        // BVN approved — update the user (does NOT affect KYC status — KYC is separate)
         const user = await User.findOne({ telegramId });
         if (user && !user.bvnVerified) {
           user.bvnVerified = true;
           user.bvnVerifiedAt = new Date();
-          user.kycStatus = 'VERIFIED';
-          user.kycVerifiedAt = new Date();
           await user.save();
           console.log(`✅ [POLL] BVN verified for telegramId ${telegramId}`);
 
