@@ -20,8 +20,20 @@ router.post('/bvn-webhook', async (req, res) => {
     return res.status(500).json({ error: 'Server not configured for webhooks' });
   }
 
-  // Verify the webhook secret (Anchor includes it in the x-anchor-webhook-secret header)
-  const providedSecret = req.headers['x-anchor-webhook-secret'] || req.headers['x-webhook-secret'] || '';
+  // Verify the webhook secret — Anchor may send it in various headers.
+  // Log all headers so we can see exactly what Anchor sends.
+  console.log('Webhook headers:', JSON.stringify(req.headers));
+
+  const providedSecret =
+    req.headers['x-anchor-webhook-secret'] ||
+    req.headers['x-webhook-secret'] ||
+    req.headers['x-anchor-secret'] ||
+    req.headers['x-secret'] ||
+    req.headers['x-hub-signature'] ||
+    req.headers['authorization']?.replace(/^Bearer\s+/i, '') ||
+    req.headers['x-api-key'] ||
+    '';
+
   if (providedSecret !== secret) {
     console.error('Webhook secret mismatch:', { provided: providedSecret, expected: secret });
     return res.status(401).json({ error: 'Unauthorized' });

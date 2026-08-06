@@ -32,15 +32,25 @@ async function profileHandler(ctx) {
     `🛡️ <b>KYC Status:</b> ${kycStatus === 'VERIFIED' ? '✅ Verified' : '❌ ' + kycStatus}\n\n` +
     'What would you like to update?';
 
+  // Build the keyboard — if BVN is verified, show a green "BVN Verified" button
+  // that is effectively unclickable (just answers the callback, no action).
+  const keyboard = [
+    [Markup.button.callback('📛 Edit Name', 'edit_name')],
+    [Markup.button.callback('📱 Edit Phone Number', 'edit_phone')],
+    [Markup.button.callback('📧 Edit Email', 'edit_email')]
+  ];
+
+  if (bvnVerified) {
+    keyboard.push([Markup.button.callback('✅ BVN Verified', 'bvn_already_verified')]);
+  } else {
+    keyboard.push([Markup.button.callback('🔐 Verify BVN', 'edit_bvn')]);
+  }
+
+  keyboard.push([Markup.button.callback('❌ Close', 'edit_close')]);
+
   await ctx.reply(message, {
     parse_mode: 'HTML',
-    ...Markup.inlineKeyboard([
-      [Markup.button.callback('📛 Edit Name', 'edit_name')],
-      [Markup.button.callback('📱 Edit Phone Number', 'edit_phone')],
-      [Markup.button.callback('📧 Edit Email', 'edit_email')],
-      [Markup.button.callback('🔐 Verify BVN', 'edit_bvn')],
-      [Markup.button.callback('❌ Close', 'edit_close')]
-    ])
+    ...Markup.inlineKeyboard(keyboard)
   });
 }
 
@@ -332,6 +342,14 @@ async function handleEditEmail(ctx) {
 }
 
 /**
+ * Handle the "BVN already verified" button — effectively unclickable.
+ * Just answers the callback so the user knows they're already verified.
+ */
+async function handleBvnAlreadyVerified(ctx) {
+  await ctx.answerCbQuery('✅ Your BVN is already verified', { show_alert: false });
+}
+
+/**
  * Close the profile menu.
  */
 async function closeProfile(ctx) {
@@ -352,5 +370,6 @@ module.exports = {
   handleEditPhoneContact,
   handleEditPhoneManual,
   handleEditEmail,
+  handleBvnAlreadyVerified,
   closeProfile
 };

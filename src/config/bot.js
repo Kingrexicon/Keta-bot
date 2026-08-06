@@ -3,7 +3,7 @@ const sessionMiddleware = require('../bot/middleware/session');
 const startHandler = require('../bot/handlers/start');
 const { buyHandler, handleAmountEntry, handleChainSelection, handleWalletEntry, handleConfirm } = require('../bot/handlers/buy');
 const { handleSurname, handleFirstName, handleOtherNames, handlePhoneContact, handlePhoneManual, handleBvnSkip } = require('../bot/handlers/onboarding');
-const { profileHandler, startEditName, startEditPhone, startEditEmail, startBvnVerification, handleEditSurname, handleEditFirstName, handleEditOtherNames, handleEditPhoneContact, handleEditPhoneManual, handleEditEmail, closeProfile } = require('../bot/handlers/profile');
+const { profileHandler, startEditName, startEditPhone, startEditEmail, startBvnVerification, handleEditSurname, handleEditFirstName, handleEditOtherNames, handleEditPhoneContact, handleEditPhoneManual, handleEditEmail, handleBvnAlreadyVerified, closeProfile } = require('../bot/handlers/profile');
 const { handleClaimPayment, handleRejectPayment, handleCancelClaim, handleConfirmPayment, handleReleaseCrypto, handleResurrectOrder, handleReceiptSubmission, handleBackToClaimed } = require('../bot/handlers/payment');
 const { verifyHandler } = require('../bot/handlers/verify');
 const { notifyAdminNewOrder } = require('../services/notificationService');
@@ -48,6 +48,7 @@ function createBot() {
   bot.action('edit_phone', startEditPhone);
   bot.action('edit_email', startEditEmail);
   bot.action('edit_bvn', startBvnVerification);
+  bot.action('bvn_already_verified', handleBvnAlreadyVerified);
   bot.action('edit_close', closeProfile);
 
   // Main menu handlers
