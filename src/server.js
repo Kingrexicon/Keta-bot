@@ -13,6 +13,7 @@ const anchorWebhookRoute = require('./routes/anchorWebhook');
 const { expireOrders } = require('./services/orderService');
 const { refreshRatesFromApi } = require('./services/rateService');
 const { runDailyJob } = require('./services/backupService');
+const { broadcastReset } = require('./services/broadcastService');
 
 const app = express();
 const PORT = process.env.PORT || 4040;
@@ -141,6 +142,18 @@ const server = app.listen(PORT, HOST, () => {
     const bot = await initializeBot();
     global.__botReady = true;
     console.log('✅ Telegram bot initialized');
+
+    // Auto-broadcast reset to all users when UPDATE_MESSAGE is set (e.g. after a deploy)
+    const updateMessage = process.env.UPDATE_MESSAGE;
+    if (updateMessage) {
+      console.log('📢 UPDATE_MESSAGE detected — broadcasting reset to all users...');
+      // Run asynchronously so it doesn't block server startup
+      setTimeout(() => {
+        broadcastReset(updateMessage)
+          .then(summary => console.log('✅ Broadcast complete:', summary))
+          .catch(err => console.error('❌ Broadcast failed:', err.message));
+      }, 5000); // 5s delay to let the bot warm up
+    }
 
     // Only mount Telegram webhook route if we're using webhook mode (not polling)
     if (process.env.NODE_ENV === 'production' && process.env.WEBHOOK_URL && process.env.USE_POLLING !== 'true') {

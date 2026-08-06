@@ -20,7 +20,8 @@ async function profileHandler(ctx) {
   const phone = user.phoneNumber || 'Not set';
   const email = user.email || 'Not set';
   const kycStatus = user.kycStatus || 'PENDING';
-  const bvnVerified = !!user.bvnVerified;
+  // A user is considered BVN-verified if either flag is set (defense against inconsistent state)
+  const bvnVerified = !!user.bvnVerified || kycStatus === 'VERIFIED';
 
   const message =
     '👤 <b>My Profile</b>\n\n' +
@@ -29,20 +30,21 @@ async function profileHandler(ctx) {
     `📧 <b>Email:</b> <code>${email}</code>\n` +
     `🆔 <b>Telegram ID:</b> <code>${telegramId}</code>\n` +
     `🔐 <b>BVN Status:</b> ${bvnVerified ? '✅ Verified' : '❌ Not verified'}\n` +
-    `🛡️ <b>KYC Status:</b> ${kycStatus === 'VERIFIED' ? '✅ Verified' : '❌ ' + kycStatus}\n\n` +
-    'What would you like to update?';
+    `🛡️ <b>KYC Status:</b> ${kycStatus === 'VERIFIED' ? '✅ Verified' : '❌ ' + kycStatus}\n\n`;
 
-  // Build the keyboard — if BVN is verified, show a green "BVN Verified" button
-  // that is effectively unclickable (just answers the callback, no action).
-  const keyboard = [
-    [Markup.button.callback('📛 Edit Name', 'edit_name')],
-    [Markup.button.callback('📱 Edit Phone Number', 'edit_phone')],
-    [Markup.button.callback('📧 Edit Email', 'edit_email')]
-  ];
+  // Build the keyboard.
+  const keyboard = [];
 
   if (bvnVerified) {
+    // Identity is locked after verification — no edits allowed.
+    message += '🔒 <b>Your identity details are locked after verification.</b>\n' +
+      'To change your name, phone, or email, please contact support.\n\n';
     keyboard.push([Markup.button.callback('✅ BVN Verified', 'bvn_already_verified')]);
   } else {
+    message += 'What would you like to update?\n';
+    keyboard.push([Markup.button.callback('📛 Edit Name', 'edit_name')]);
+    keyboard.push([Markup.button.callback('📱 Edit Phone Number', 'edit_phone')]);
+    keyboard.push([Markup.button.callback('📧 Edit Email', 'edit_email')]);
     keyboard.push([Markup.button.callback('🔐 Verify BVN', 'edit_bvn')]);
   }
 
@@ -81,6 +83,13 @@ async function startEditPhone(ctx) {
 }
 
 /**
+ * Check whether a user is BVN-verified (either flag set).
+ */
+function isBvnVerified(user) {
+  return !!user.bvnVerified || (user.kycStatus === 'VERIFIED');
+}
+
+/**
  * Start BVN verification (re-verify after editing details).
  */
 async function startBvnVerification(ctx) {
@@ -90,6 +99,15 @@ async function startBvnVerification(ctx) {
 
   if (!user) {
     await ctx.reply('❌ No account found. Please use /start to create an account first.');
+    return;
+  }
+
+  // Security: refuse to generate a verification link if already verified.
+  if (isBvnVerified(user)) {
+    await ctx.reply(
+      '✅ <b>You are already BVN verified.</b>\n\nYour identity details are locked. If you need to change them, please contact support.',
+      { parse_mode: 'HTML', ...mainMenu() }
+    );
     return;
   }
 
@@ -176,6 +194,17 @@ async function handleEditOtherNames(ctx) {
   // Save the updated name to the user record
   const telegramId = ctx.from.id;
   const user = await User.findOne({ telegramId });
+
+  // Security: refuse to change identity details if already verified.
+  if (user && isBvnVerified(user)) {
+    ctx.session.editProfile = null;
+    ctx.session.step = null;
+    return ctx.reply(
+      '🔒 <b>Your identity details are locked after verification.</b>\n\nTo change your name, please contact support.',
+      { parse_mode: 'HTML', ...mainMenu() }
+    );
+  }
+
   if (user) {
     user.surname = edit.surname;
     user.firstName = edit.firstName;
@@ -267,6 +296,16 @@ async function saveEditedPhone(ctx, phoneNumber, verifiedViaTelegram) {
   const telegramId = ctx.from.id;
   const user = await User.findOne({ telegramId });
 
+  // Security: refuse to change identity details if already verified.
+  if (user && isBvnVerified(user)) {
+    ctx.session.editProfile = null;
+    ctx.session.step = null;
+    return ctx.reply(
+      '🔒 <b>Your identity details are locked after verification.</b>\n\nTo change your phone number, please contact support.',
+      { parse_mode: 'HTML', ...mainMenu() }
+    );
+  }
+
   if (user) {
     user.phoneNumber = phoneNumber;
     user.phoneVerifiedViaTelegram = verifiedViaTelegram;
@@ -326,6 +365,16 @@ async function handleEditEmail(ctx) {
 
   const telegramId = ctx.from.id;
   const user = await User.findOne({ telegramId });
+
+  // Security: refuse to change identity details if already verified.
+  if (user && isBvnVerified(user)) {
+    ctx.session.editProfile = null;
+    ctx.session.step = null;
+    return ctx.reply(
+      '🔒 <b>Your identity details are locked after verification.</b>\n\nTo change your email, please contact support.',
+      { parse_mode: 'HTML', ...mainMenu() }
+    );
+  }
 
   if (user) {
     user.email = text;

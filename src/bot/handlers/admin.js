@@ -8,6 +8,7 @@ const { checkNativeBalance, checkTokenBalance, checkSolanaNativeBalance, checkSo
 const { ethers } = require('ethers');
 const { Connection, Keypair, PublicKey, LAMPORTS_PER_SOL } = require('@solana/web3.js');
 const { Markup } = require('telegraf');
+const { broadcastMessage } = require('../../services/broadcastService');
 
 async function pendingOrdersHandler(ctx) {
   if (!(await isAdminUser(ctx.from.id))) {
@@ -338,6 +339,25 @@ async function balanceHandler(ctx) {
   }
 }
 
+async function broadcastHandler(ctx) {
+  if (!(await isAdminUser(ctx.from.id))) {
+    return ctx.reply('❌ Unauthorized. Admin only.');
+  }
+
+  const text = ctx.message.text.replace('/broadcast', '').trim();
+  if (!text) {
+    return ctx.reply('Usage: /broadcast <message>\n\nExample: /broadcast 🚀 New update: Sell feature is now live!');
+  }
+
+  await ctx.reply('📢 Broadcasting to all users...');
+  try {
+    const summary = await broadcastMessage(text);
+    await ctx.reply(`✅ Broadcast complete!\n\n${summary}`);
+  } catch (error) {
+    await ctx.reply(`❌ Broadcast failed: ${error.message}`);
+  }
+}
+
 async function verifyUserHandler(ctx) {
   if (!(await isAdminUser(ctx.from.id))) {
     return ctx.reply('❌ Unauthorized. Admin only.');
@@ -380,5 +400,6 @@ module.exports = {
   cancelRateHandler,
   statsHandler,
   balanceHandler,
-  verifyUserHandler
+  verifyUserHandler,
+  broadcastHandler
 };

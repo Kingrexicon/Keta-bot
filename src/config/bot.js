@@ -7,7 +7,7 @@ const { profileHandler, startEditName, startEditPhone, startEditEmail, startBvnV
 const { handleClaimPayment, handleRejectPayment, handleCancelClaim, handleConfirmPayment, handleReleaseCrypto, handleResurrectOrder, handleReceiptSubmission, handleBackToClaimed } = require('../bot/handlers/payment');
 const { verifyHandler } = require('../bot/handlers/verify');
 const { notifyAdminNewOrder } = require('../services/notificationService');
-const { pendingOrdersHandler, startRateUpdateHandler, selectRateTypeHandler, selectRateCoinHandler, handleRateInput, confirmRateHandler, cancelRateHandler, statsHandler, balanceHandler, verifyUserHandler } = require('../bot/handlers/admin');
+const { pendingOrdersHandler, startRateUpdateHandler, selectRateTypeHandler, selectRateCoinHandler, handleRateInput, confirmRateHandler, cancelRateHandler, statsHandler, balanceHandler, verifyUserHandler, broadcastHandler } = require('../bot/handlers/admin');
 const { initializeRates } = require('../services/rateService');
 const Order = require('../models/Order');
 
@@ -102,6 +102,7 @@ function createBot() {
   bot.hears('verify', verifyHandler);
   bot.hears('🔍 Verify Identity', verifyHandler);
   bot.command('verifyuser', verifyUserHandler);
+  bot.command('broadcast', broadcastHandler);
   bot.hears('help', async (ctx) => {
     // Quick admin check for sensitive info
     const { isAdminUser } = require('../bot/handlers/payment');
@@ -151,6 +152,7 @@ function createBot() {
     message += `stats - Order statistics\n`;
     message += `setrate - Update rates\n`;
     message += `balances - Check wallet balances\n`;
+    message += `broadcast - Send update to all users\n`;
     message += `help - Show this message\n`;
 
     await ctx.reply(message, { parse_mode: 'HTML' });
