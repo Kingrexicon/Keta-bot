@@ -3,6 +3,7 @@ const sessionMiddleware = require('../bot/middleware/session');
 const startHandler = require('../bot/handlers/start');
 const { buyHandler, handleAmountEntry, handleChainSelection, handleWalletEntry, handleConfirm } = require('../bot/handlers/buy');
 const { handleSurname, handleFirstName, handleOtherNames, handlePhoneContact, handlePhoneManual, handleBvnSkip } = require('../bot/handlers/onboarding');
+const { profileHandler, startEditName, startEditPhone, startBvnVerification, handleEditSurname, handleEditFirstName, handleEditOtherNames, handleEditPhoneContact, handleEditPhoneManual, closeProfile } = require('../bot/handlers/profile');
 const { handleClaimPayment, handleRejectPayment, handleCancelClaim, handleConfirmPayment, handleReleaseCrypto, handleResurrectOrder, handleReceiptSubmission, handleBackToClaimed } = require('../bot/handlers/payment');
 const { verifyHandler } = require('../bot/handlers/verify');
 const { notifyAdminNewOrder } = require('../services/notificationService');
@@ -25,7 +26,13 @@ function createBot() {
   bot.use(sessionMiddleware);
 
   bot.start(startHandler);
-  bot.on('contact', handlePhoneContact);
+  bot.on('contact', async (ctx) => {
+    // Route contact to the correct flow based on current step
+    if (ctx.session?.step === 'EDIT_PHONE') {
+      return handleEditPhoneContact(ctx);
+    }
+    return handlePhoneContact(ctx);
+  });
   bot.hears('Reset', startHandler);
   bot.action('restart_bot', async (ctx) => {
     await ctx.answerCbQuery();
@@ -34,6 +41,13 @@ function createBot() {
 
   // Onboarding: skip BVN verification
   bot.action('bvn_skip', handleBvnSkip);
+
+  // Profile management
+  bot.hears('✏️ My Profile', profileHandler);
+  bot.action('edit_name', startEditName);
+  bot.action('edit_phone', startEditPhone);
+  bot.action('edit_bvn', startBvnVerification);
+  bot.action('edit_close', closeProfile);
 
   // Main menu handlers
   bot.hears('🟢 Buy Crypto', buyHandler);
@@ -196,6 +210,14 @@ function createBot() {
         return handleOtherNames(ctx);
       case 'ENTER_PHONE':
         return handlePhoneManual(ctx);
+      case 'EDIT_SURNAME':
+        return handleEditSurname(ctx);
+      case 'EDIT_FIRST_NAME':
+        return handleEditFirstName(ctx);
+      case 'EDIT_OTHER_NAMES':
+        return handleEditOtherNames(ctx);
+      case 'EDIT_PHONE':
+        return handleEditPhoneManual(ctx);
       case 'ENTER_AMOUNT':
         return handleAmountEntry(ctx);
       case 'SELECT_CHAIN':

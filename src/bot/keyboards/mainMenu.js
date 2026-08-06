@@ -4,7 +4,7 @@ const mainMenu = () =>
   Markup.keyboard([
     ['🟢 Buy Crypto', '🔴 Sell Crypto'],
     ['📜 My Orders', '📈 Rates'],
-    ['🔍 Verify Identity'],
+    ['🔍 Verify Identity', '✏️ My Profile'],
     ['Reset']
   ]).resize();
 
@@ -51,7 +51,7 @@ const combinedAdminMenu = () =>
   Markup.keyboard([
     ['🟢 Buy Crypto', '🔴 Sell Crypto'],
     ['📜 My Orders', '📈 Rates'],
-    ['🔍 Verify Identity'],
+    ['🔍 Verify Identity', '✏️ My Profile'],
     ['pending', 'stats', 'balances'],
     ['setrate', 'help']
   ]).resize();
