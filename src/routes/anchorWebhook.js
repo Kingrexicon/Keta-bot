@@ -1,4 +1,5 @@
 const express = require('express');
+const crypto = require('crypto');
 const router = express.Router();
 const User = require('../models/User');
 const { getBot } = require('../config/bot');
@@ -20,23 +21,39 @@ router.post('/bvn-webhook', async (req, res) => {
     return res.status(500).json({ error: 'Server not configured for webhooks' });
   }
 
-  // Verify the webhook secret — Anchor may send it in various headers.
-  // Log all headers so we can see exactly what Anchor sends.
-  console.log('Webhook headers:', JSON.stringify(req.headers));
+  // Anchor signs the webhook payload with HMAC-SHA256 using the webhook secret.
+  // The signature is sent base64-encoded in the `x-anchor-signature` header.
+  // There is NO plaintext secret header — we must verify the payload signature.
+  const signature = req.headers['x-anchor-signature'] || '';
+  // req.rawBody is captured by the express.json verify middleware in server.js
+  const rawBody = req.rawBody || JSON.stringify(req.body);
 
-  const providedSecret =
-    req.headers['x-anchor-webhook-secret'] ||
-    req.headers['x-webhook-secret'] ||
-    req.headers['x-anchor-secret'] ||
-    req.headers['x-secret'] ||
-    req.headers['x-hub-signature'] ||
-    req.headers['authorization']?.replace(/^Bearer\s+/i, '') ||
-    req.headers['x-api-key'] ||
-    '';
+  if (signature) {
+    // Compute the expected HMAC-SHA256 of the raw body using the webhook secret
+    const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('base64');
+    const provided = signature.trim();
 
-  if (providedSecret !== secret) {
-    console.error('Webhook secret mismatch:', { provided: providedSecret, expected: secret });
-    return res.status(401).json({ error: 'Unauthorized' });
+    // Timing-safe comparison
+    const expectedBuf = Buffer.from(expected);
+    const providedBuf = Buffer.from(provided);
+    const ok = expectedBuf.length === providedBuf.length && crypto.timingSafeEqual(expectedBuf, providedBuf);
+
+    if (!ok) {
+      console.error('Webhook signature mismatch:', { provided, expected });
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+  } else {
+    // Fallback: accept if a plaintext secret header matches (legacy / other providers)
+    const providedSecret =
+      req.headers['x-anchor-webhook-secret'] ||
+      req.headers['x-webhook-secret'] ||
+      req.headers['x-anchor-secret'] ||
+      req.headers['x-secret'] ||
+      '';
+    if (!providedSecret || providedSecret !== secret) {
+      console.error('Webhook secret mismatch:', { provided: providedSecret, expected: secret });
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
   }
 
   const payload = req.body;
