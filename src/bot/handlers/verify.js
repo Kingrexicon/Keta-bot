@@ -18,8 +18,16 @@ async function verifyHandler(ctx) {
     return;
   }
 
-  const bvnVerified = !!user.bvnVerified;
+  // Robust detection: verified if boolean is true OR timestamp exists (self-heals broken records).
+  const bvnVerified = !!(user.bvnVerified || user.bvnVerifiedAt);
   const kycStatus = user.kycStatus || 'PENDING';
+
+  // Auto-heal: if there's proof of verification but the boolean was never set (old bug),
+  // persist the correction so the record is consistent going forward.
+  if (bvnVerified && !user.bvnVerified && user.bvnVerifiedAt) {
+    user.bvnVerified = true;
+    await user.save();
+  }
 
   let message =
     '🛡️ <b>Verification Status</b>\n\n' +

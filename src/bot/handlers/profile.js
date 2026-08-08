@@ -21,8 +21,16 @@ async function profileHandler(ctx) {
   const email = user.email || 'Not set';
   const kycStatus = user.kycStatus || 'PENDING';
   // BVN (Anchor) and KYC (DeepIDV) are separate — display independently.
-  const bvnVerified = !!user.bvnVerified;
+  // Robust detection: verified if boolean is true OR timestamp exists (self-heals broken records).
+  const bvnVerified = !!(user.bvnVerified || user.bvnVerifiedAt);
   const identityLocked = bvnVerified || kycStatus === 'VERIFIED';
+
+  // Auto-heal: if there's proof of verification but the boolean was never set (old bug),
+  // persist the correction so the record is consistent going forward.
+  if (bvnVerified && !user.bvnVerified && user.bvnVerifiedAt) {
+    user.bvnVerified = true;
+    await user.save();
+  }
 
   let message =
     '👤 <b>My Profile</b>\n\n' +
@@ -93,7 +101,7 @@ async function startEditPhone(ctx) {
  * details cannot be changed without contacting support.
  */
 function isBvnVerified(user) {
-  return !!user.bvnVerified || (user.kycStatus === 'VERIFIED');
+  return !!(user.bvnVerified || user.bvnVerifiedAt) || (user.kycStatus === 'VERIFIED');
 }
 
 /**
