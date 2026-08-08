@@ -3,6 +3,7 @@ const crypto = require('crypto');
 const router = express.Router();
 const User = require('../models/User');
 const { getBot } = require('../config/bot');
+const { mainMenu } = require('../bot/keyboards/mainMenu');
 
 /**
  * POST /anchor/bvn-webhook
@@ -158,11 +159,11 @@ router.post('/bvn-webhook', async (req, res) => {
         const bot = getBot();
         const appBase = process.env.APP_BASE_URL || '';
         if (bot && bot.telegram) {
-          await bot.telegram.sendMessage(
-            user.telegramId,
-            '✅ <b>BVN Verified Successfully!</b>\n\nYour BVN has been verified for security and fraud prevention. You can now receive payouts.',
-            { parse_mode: 'HTML' }
-          );
+              await bot.telegram.sendMessage(
+                user.telegramId,
+                '✅ <b>BVN Verified Successfully!</b>\n\nYour BVN has been verified for security and fraud prevention. You can now receive payouts.',
+                { parse_mode: 'HTML', ...mainMenu() }
+              );
         }
       } catch (e) {
         console.error('Failed to notify user of BVN approval:', e.message);

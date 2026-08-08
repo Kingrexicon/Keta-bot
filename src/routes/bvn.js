@@ -4,6 +4,7 @@ const User = require('../models/User');
 const { verifyBvnToken } = require('../utils/bvnToken');
 const { createCustomer, submitKyc, getCustomer, getVerifications } = require('../services/anchorService');
 const { getBot } = require('../config/bot');
+const { mainMenu } = require('../bot/keyboards/mainMenu');
 
 /**
  * GET /bvn-verify — the hosted BVN input form.
@@ -299,7 +300,7 @@ router.post('/bvn-verify/submit', async (req, res) => {
                 await bot.telegram.sendMessage(
                   user.telegramId,
                   '✅ <b>BVN Verified Successfully!</b>\n\nYour BVN has been verified for security and fraud prevention. You can now receive payouts.',
-                  { parse_mode: 'HTML' }
+                  { parse_mode: 'HTML', ...mainMenu() }
                 );
               }
             } catch (e) {
@@ -405,7 +406,7 @@ async function startVerificationPoll(telegramId, customerId) {
               await bot.telegram.sendMessage(
                 telegramId,
                 '✅ <b>BVN Verified Successfully!</b>\n\nYour BVN has been verified for security and fraud prevention. You can now receive payouts.',
-                { parse_mode: 'HTML' }
+                { parse_mode: 'HTML', ...mainMenu() }
               );
             }
           } catch (e) {
