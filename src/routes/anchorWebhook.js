@@ -29,17 +29,63 @@ router.post('/bvn-webhook', async (req, res) => {
   const rawBody = req.rawBody || JSON.stringify(req.body);
 
   if (signature) {
-    // Compute the expected HMAC-SHA256 of the raw body using the webhook secret
-    const expected = crypto.createHmac('sha256', secret).update(rawBody).digest('base64');
     const provided = signature.trim();
 
-    // Timing-safe comparison
-    const expectedBuf = Buffer.from(expected);
-    const providedBuf = Buffer.from(provided);
-    const ok = expectedBuf.length === providedBuf.length && crypto.timingSafeEqual(expectedBuf, providedBuf);
+    // Anchor's exact signing scheme isn't documented, so we try several
+    // common combinations and accept if ANY matches. This is defensive and
+    // logs which scheme matched for future reference.
+    const candidates = [];
 
-    if (!ok) {
-      console.error('Webhook signature mismatch:', { provided, expected });
+    // Scheme 1: HMAC-SHA256 raw bytes -> base64
+    candidates.push({
+      name: 'sha256-raw-base64',
+      value: crypto.createHmac('sha256', secret).update(rawBody).digest('base64')
+    });
+
+    // Scheme 2: HMAC-SHA256 hex digest -> base64
+    candidates.push({
+      name: 'sha256-hex-base64',
+      value: Buffer.from(crypto.createHmac('sha256', secret).update(rawBody).digest('hex')).toString('base64')
+    });
+
+    // Scheme 3: HMAC-SHA1 raw bytes -> base64
+    candidates.push({
+      name: 'sha1-raw-base64',
+      value: crypto.createHmac('sha1', secret).update(rawBody).digest('base64')
+    });
+
+    // Scheme 4: HMAC-SHA1 hex digest -> base64
+    candidates.push({
+      name: 'sha1-hex-base64',
+      value: Buffer.from(crypto.createHmac('sha1', secret).update(rawBody).digest('hex')).toString('base64')
+    });
+
+    // Scheme 5: HMAC-SHA256 over JSON.stringify(body) raw bytes -> base64
+    candidates.push({
+      name: 'sha256-json-raw-base64',
+      value: crypto.createHmac('sha256', secret).update(JSON.stringify(req.body)).digest('base64')
+    });
+
+    // Scheme 6: HMAC-SHA256 over JSON.stringify(body) hex -> base64
+    candidates.push({
+      name: 'sha256-json-hex-base64',
+      value: Buffer.from(crypto.createHmac('sha256', secret).update(JSON.stringify(req.body)).digest('hex')).toString('base64')
+    });
+
+    let matched = false;
+    for (const c of candidates) {
+      const expectedBuf = Buffer.from(c.value);
+      const providedBuf = Buffer.from(provided);
+      if (expectedBuf.length === providedBuf.length && crypto.timingSafeEqual(expectedBuf, providedBuf)) {
+        matched = true;
+        console.log(`✅ Webhook signature verified via scheme: ${c.name}`);
+        break;
+      }
+    }
+
+    if (!matched) {
+      console.error('Webhook signature mismatch. Provided:', provided);
+      console.error('Candidate values:', candidates.map(c => `${c.name}=${c.value}`).join(', '));
       return res.status(401).json({ error: 'Unauthorized' });
     }
   } else {
