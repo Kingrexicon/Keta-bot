@@ -1,6 +1,6 @@
 const { Markup } = require('telegraf');
 const User = require('../../models/User');
-const { validateName, validatePhoneNumber } = require('../../utils/validators');
+const { validateName, validatePhoneNumber, normalizePhoneNumber } = require('../../utils/validators');
 const { mainMenu, phoneMenu } = require('../keyboards/mainMenu');
 const { createBvnToken } = require('../../utils/bvnToken');
 
@@ -271,7 +271,7 @@ async function handleEditPhoneContact(ctx) {
     return;
   }
 
-  await saveEditedPhone(ctx, phoneNumber, true);
+  await saveEditedPhone(ctx, normalizePhoneNumber(phoneNumber), true);
 }
 
 /**
@@ -300,7 +300,7 @@ async function handleEditPhoneManual(ctx) {
     );
   }
 
-  await saveEditedPhone(ctx, text, false);
+  await saveEditedPhone(ctx, normalizePhoneNumber(text), false);
 }
 
 /**

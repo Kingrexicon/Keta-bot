@@ -179,9 +179,11 @@ router.post('/bvn-verify/submit', async (req, res) => {
     // Step 2: Submit BVN KYC
     await submitKyc({ customerId, bvn, dateOfBirth, gender });
 
-    // Step 3: Save email + gender to the user record, and record consent timestamp
+    // Step 3: Save email + gender to the user record, store a masked BVN
+    // (only the last 4 digits — never the raw BVN), and record consent timestamp.
     user.email = email;
     user.gender = gender;
+    user.bvnMasked = '*******' + bvn.slice(-4);
     user.bvnConsentAt = new Date();
     await user.save();
 
@@ -263,9 +265,10 @@ router.post('/bvn-verify/submit', async (req, res) => {
     // Treat this as a success: update the DB, notify the user, and show a success page.
     if (error.message.includes('412') || error.message.toLowerCase().includes('kyc already completed')) {
       try {
-        // Save email + gender even on this path
+        // Save email + gender even on this path, plus a masked BVN (last 4 digits only)
         user.email = email;
         user.gender = gender;
+        user.bvnMasked = '*******' + bvn.slice(-4);
         user.bvnConsentAt = new Date();
         await user.save();
 
@@ -467,7 +470,7 @@ router.get('/terms', (req, res) => {
         <h2>2. How Your BVN Is Handled</h2>
         <ul>
           <li>Your BVN is submitted <strong>directly to Anchor</strong> for validation against the Nigerian Inter-Bank Settlement System (NIBSS).</li>
-          <li><strong>We do not store your raw BVN.</strong> We only store a masked version (e.g. *******1234) and your verification status.</li>
+          <li><strong>We do not store your raw BVN.</strong> We only store a masked version showing the last 4 digits (e.g. *******1234) and your verification status, for support and audit purposes.</li>
           <li>Anchor processes your data in accordance with its own privacy policy and applicable data protection regulations.</li>
         </ul>
 

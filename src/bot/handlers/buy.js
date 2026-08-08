@@ -6,9 +6,31 @@ const { CHAINS } = require('../../utils/constants');
 const { validateWalletAddress } = require('../../utils/validators');
 const { chainMenu, cancelMenu, confirmMenu, mainMenu } = require('../keyboards/mainMenu');
 const User = require('../../models/User');
+const { createBvnToken } = require('../../utils/bvnToken');
 const { MIN_BUY_USD, LARGE_BUY_USD_THRESHOLD, DEEPIDV_URL, MIN_FIAT_AMOUNT, MIN_EFFECTIVE_NGN_USD_RATE, MIN_RATE_BY_COIN } = require('../../utils/constants');
 
 async function buyHandler(ctx) {
+  // BVN verification is required for ALL transactions (payments/transactions).
+  const user = await User.findOne({ telegramId: ctx.from.id });
+  const bvnVerified = !!(user && (user.bvnVerified || user.bvnVerifiedAt));
+
+  if (!bvnVerified) {
+    const appBase = process.env.APP_BASE_URL || 'https://keta-bot-79vw.onrender.com';
+    const token = createBvnToken(ctx.from.id);
+    const verifyUrl = `${appBase}/bvn-verify?token=${token}`;
+    return ctx.reply(
+      '🔐 <b>BVN Verification Required</b>\n\n' +
+      'You must verify your BVN before you can make transactions.\n\n' +
+      'BVN verification enables payments and transactions. Tap the button below to verify now:',
+      {
+        parse_mode: 'HTML',
+        ...Markup.inlineKeyboard([
+          [Markup.button.url('🔐 Verify BVN', verifyUrl)]
+        ])
+      }
+    );
+  }
+
   ctx.session.orderFlow = { type: 'BUY' };
   ctx.session.step = 'ENTER_AMOUNT';
   await ctx.reply(

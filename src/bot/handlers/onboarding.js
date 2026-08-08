@@ -1,5 +1,5 @@
 const User = require('../../models/User');
-const { validateName, validatePhoneNumber } = require('../../utils/validators');
+const { validateName, validatePhoneNumber, normalizePhoneNumber } = require('../../utils/validators');
 const { phoneMenu, skipMenu, mainMenu } = require('../keyboards/mainMenu');
 const { createBvnToken } = require('../../utils/bvnToken');
 const { Markup } = require('telegraf');
@@ -123,7 +123,7 @@ async function handlePhoneContact(ctx) {
   }
 
   await savePhoneAndProceed(ctx, {
-    phoneNumber,
+    phoneNumber: normalizePhoneNumber(phoneNumber),
     phoneVerifiedViaTelegram: true
   });
 }
@@ -154,7 +154,7 @@ async function handlePhoneManual(ctx) {
   }
 
   await savePhoneAndProceed(ctx, {
-    phoneNumber: text,
+    phoneNumber: normalizePhoneNumber(text),
     phoneVerifiedViaTelegram: false
   });
 }

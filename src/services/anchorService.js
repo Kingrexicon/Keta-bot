@@ -53,6 +53,10 @@ async function anchorRequest(method, path, body = null) {
  * @returns {Promise<string>} customerId (e.g. "170116154363520-anc_ind_cst")
  */
 async function createCustomer({ firstName, middleName, lastName, email, phoneNumber }) {
+  // Normalize the phone number (strip '+', spaces, dashes) — Anchor rejects numbers with '+'
+  const { normalizePhoneNumber } = require('../utils/validators');
+  const cleanPhone = normalizePhoneNumber(phoneNumber || '');
+
   const data = {
     data: {
       type: 'IndividualCustomer',
@@ -63,7 +67,7 @@ async function createCustomer({ firstName, middleName, lastName, email, phoneNum
           lastName
         },
         email,
-        phoneNumber: phoneNumber || '',
+        phoneNumber: cleanPhone,
         address: {
           addressLine_1: 'Lagos, Nigeria',
           addressLine_2: 'Lagos, Nigeria',

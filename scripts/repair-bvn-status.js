@@ -7,6 +7,9 @@
  */
 require('dotenv').config();
 require('dotenv').config({ path: '.env.local', override: true });
+// Set public DNS resolvers — required on some networks for MongoDB Atlas SRV lookups
+const dns = require('dns');
+dns.setServers(['1.1.1.1', '8.8.8.8']);
 const { connectDB, disconnectDB } = require('../src/config/database');
 const User = require('../src/models/User');
 

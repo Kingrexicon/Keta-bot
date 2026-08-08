@@ -79,11 +79,26 @@ function validatePhoneNumber(phone) {
   return /^\+?\d{8,15}$/.test(trimmed);
 }
 
+/**
+ * Normalize a phone number for storage/API submission.
+ * Strips the leading '+' (Anchor rejects numbers with '+'), plus any
+ * spaces, dashes, or parentheses. Keeps the remaining digits as-is.
+ * Examples:
+ *   +2348012345678  -> 2348012345678
+ *   +234 801 234 5678 -> 2348012345678
+ *   09066551893     -> 09066551893
+ */
+function normalizePhoneNumber(phone) {
+  if (typeof phone !== 'string') return phone;
+  return phone.replace(/[+\s\-()]/g, '');
+}
+
 module.exports = {
   generateOrderRef,
   validateWalletAddress,
   validateEVMAddress,
   validateSolanaAddress,
   validateName,
-  validatePhoneNumber
+  validatePhoneNumber,
+  normalizePhoneNumber
 };
